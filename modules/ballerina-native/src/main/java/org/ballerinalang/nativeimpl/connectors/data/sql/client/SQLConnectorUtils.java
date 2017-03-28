@@ -31,6 +31,7 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.math.BigDecimal;
 import java.nio.charset.Charset;
+import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
 import java.sql.Clob;
@@ -40,11 +41,14 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Struct;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.Base64;
 import java.util.Calendar;
+import java.util.Locale;
+import java.util.StringJoiner;
 import java.util.TimeZone;
 
 /**
@@ -57,18 +61,24 @@ public class SQLConnectorUtils {
     public static void setIntValue(PreparedStatement stmt, BValue value, int index, int direction, int sqlType) {
         Integer val = null;
         if (value != null) {
-            val = Integer.parseInt(value.stringValue());
+            String strValue = value.stringValue();
+            if (!strValue.isEmpty()) {
+                try {
+                    val = Integer.parseInt(strValue);
+                } catch (NumberFormatException e) {
+                    throw new BallerinaException("invalid value for integer: " + strValue);
+                }
+            }
         }
-
         try {
             if (Constants.QueryParamDirection.IN == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setInt(index + 1, val);
                 }
             } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setInt(index + 1, val);
@@ -112,18 +122,24 @@ public class SQLConnectorUtils {
     public static void setDoubleValue(PreparedStatement stmt, BValue value, int index, int direction, int sqlType) {
         Double val = null;
         if (value != null) {
-            val = Double.parseDouble(value.stringValue());
+            String strValue = value.stringValue();
+            if (!strValue.isEmpty()) {
+                try {
+                    val = Double.parseDouble(strValue);
+                } catch (NumberFormatException e) {
+                    throw new BallerinaException("invalid value for double: " + strValue);
+                }
+            }
         }
-
         try {
             if (Constants.QueryParamDirection.IN == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setDouble(index + 1, val);
                 }
             } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setDouble(index + 1, val);
@@ -142,18 +158,24 @@ public class SQLConnectorUtils {
     public static void setNumericValue(PreparedStatement stmt, BValue value, int index, int direction, int sqlType) {
         BigDecimal val = null;
         if (value != null) {
-            val = new BigDecimal(value.stringValue());
+            String strValue = value.stringValue();
+            if (!strValue.isEmpty()) {
+                try {
+                    val = new BigDecimal(strValue);
+                } catch (NumberFormatException e) {
+                    throw new BallerinaException("invalid value for numeric: " + strValue);
+                }
+            }
         }
-
         try {
             if (Constants.QueryParamDirection.IN == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setBigDecimal(index + 1, val);
                 }
             } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setBigDecimal(index + 1, val);
@@ -172,18 +194,20 @@ public class SQLConnectorUtils {
     public static void setBooleanValue(PreparedStatement stmt, BValue value, int index, int direction, int sqlType) {
         Boolean val = null;
         if (value != null) {
-            val = Boolean.valueOf(value.stringValue());
+            String strValue = value.stringValue();
+            if (!strValue.isEmpty()) {
+                val = Boolean.valueOf(strValue);
+            }
         }
-
         try {
             if (Constants.QueryParamDirection.IN == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setBoolean(index + 1, val);
                 }
             } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setBoolean(index + 1, val);
@@ -202,18 +226,24 @@ public class SQLConnectorUtils {
     public static void setTinyIntValue(PreparedStatement stmt, BValue value, int index, int direction, int sqlType) {
         Byte val = null;
         if (value != null) {
-            val = Byte.valueOf(value.stringValue());
+            String strValue = value.stringValue();
+            if (!strValue.isEmpty()) {
+                try {
+                    val = Byte.valueOf(strValue);
+                } catch (NumberFormatException e) {
+                    throw new BallerinaException("invalid value for byte: " + strValue);
+                }
+            }
         }
-
         try {
             if (Constants.QueryParamDirection.IN == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setByte(index + 1, val);
                 }
             } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setByte(index + 1, val);
@@ -232,18 +262,24 @@ public class SQLConnectorUtils {
     public static void setSmallIntValue(PreparedStatement stmt, BValue value, int index, int direction, int sqlType) {
         Short val = null;
         if (value != null) {
-            val = Short.parseShort(value.stringValue());
+            String strValue = value.stringValue();
+            if (!strValue.isEmpty()) {
+                try {
+                    val = Short.parseShort(strValue);
+                } catch (NumberFormatException e) {
+                    throw new BallerinaException("invalid value for short: " + strValue);
+                }
+            }
         }
-
         try {
             if (Constants.QueryParamDirection.IN == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setShort(index + 1, val);
                 }
             } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setShort(index + 1, val);
@@ -262,18 +298,24 @@ public class SQLConnectorUtils {
     public static void setBigIntValue(PreparedStatement stmt, BValue value, int index, int direction, int sqlType) {
         Long val = null;
         if (value != null) {
-            val = Long.parseLong(value.stringValue());
+            String strValue = value.stringValue();
+            if (!strValue.isEmpty()) {
+                try {
+                    val = Long.parseLong(strValue);
+                } catch (NumberFormatException e) {
+                    throw new BallerinaException("invalid value for bigint: " + strValue);
+                }
+            }
         }
-
         try {
             if (Constants.QueryParamDirection.IN == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setLong(index + 1, val);
                 }
             } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setLong(index + 1, val);
@@ -292,18 +334,24 @@ public class SQLConnectorUtils {
     public static void setRealValue(PreparedStatement stmt, BValue value, int index, int direction, int sqlType) {
         Float val = null;
         if (value != null) {
-            val = Float.parseFloat(value.stringValue());
+            String strValue = value.stringValue();
+            if (!strValue.isEmpty()) {
+                try {
+                    val = Float.parseFloat(strValue);
+                } catch (NumberFormatException e) {
+                    throw new BallerinaException("invalid value for float: " + strValue);
+                }
+            }
         }
-
         try {
             if (Constants.QueryParamDirection.IN == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setFloat(index + 1, val);
                 }
             } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setFloat(index + 1, val);
@@ -322,18 +370,24 @@ public class SQLConnectorUtils {
     public static void setDateValue(PreparedStatement stmt, BValue value, int index, int direction, int sqlType) {
         Date val = null;
         if (value != null) {
-            val = new Date(Long.parseLong(value.stringValue()));
+            String strValue = value.stringValue();
+            if (!strValue.isEmpty()) {
+                try {
+                    val = new Date(Long.parseLong(strValue));
+                } catch (NumberFormatException e) {
+                    throw new BallerinaException("invalid value for long: " + strValue);
+                }
+            }
         }
-
         try {
             if (Constants.QueryParamDirection.IN == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setDate(index + 1, val);
                 }
             } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setDate(index + 1, val);
@@ -352,18 +406,24 @@ public class SQLConnectorUtils {
     public static void setTimeStampValue(PreparedStatement stmt, BValue value, int index, int direction, int sqlType) {
         Timestamp val = null;
         if (value != null) {
-            val = new Timestamp(Long.parseLong(value.stringValue()));
+            String strValue = value.stringValue();
+            if (!strValue.isEmpty()) {
+                try {
+                    val = new Timestamp(Long.parseLong(strValue));
+                } catch (NumberFormatException e) {
+                    throw new BallerinaException("invalid value for long: " + strValue);
+                }
+            }
         }
-
         try {
             if (Constants.QueryParamDirection.IN == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setTimestamp(index + 1, val);
                 }
             } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setTimestamp(index + 1, val);
@@ -382,18 +442,24 @@ public class SQLConnectorUtils {
     public static void setTimeValue(PreparedStatement stmt, BValue value, int index, int direction, int sqlType) {
         Time val = null;
         if (value != null) {
-            val = new Time(Long.parseLong(value.stringValue()));
+            String strValue = value.stringValue();
+            if (!strValue.isEmpty()) {
+                try {
+                    val = new Time(Long.parseLong(strValue));
+                } catch (NumberFormatException e) {
+                    throw new BallerinaException("invalid value for long: " + strValue);
+                }
+            }
         }
-
         try {
             if (Constants.QueryParamDirection.IN == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setTime(index + 1, val);
                 }
             } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setTime(index + 1, val);
@@ -414,16 +480,15 @@ public class SQLConnectorUtils {
         if (value != null) {
             val = getBytesFromBase64String(value.stringValue());
         }
-
         try {
             if (Constants.QueryParamDirection.IN == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setBinaryStream(index + 1, new ByteArrayInputStream(val), val.length);
                 }
             } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setBinaryStream(index + 1, new ByteArrayInputStream(val), val.length);
@@ -444,16 +509,15 @@ public class SQLConnectorUtils {
         if (value != null) {
             val = getBytesFromBase64String(value.stringValue());
         }
-
         try {
             if (Constants.QueryParamDirection.IN == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setBlob(index + 1, new ByteArrayInputStream(val), val.length);
                 }
             } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setBlob(index + 1, new ByteArrayInputStream(val), val.length);
@@ -474,16 +538,15 @@ public class SQLConnectorUtils {
         if (value != null) {
             val = new BufferedReader(new StringReader(value.stringValue()));
         }
-
         try {
             if (Constants.QueryParamDirection.IN == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setClob(index + 1, val, value.stringValue().length());
                 }
             } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (value == null) {
+                if (val == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
                     stmt.setClob(index + 1, val, value.stringValue().length());
@@ -496,6 +559,74 @@ public class SQLConnectorUtils {
             }
         } catch (SQLException e) {
             throw new BallerinaException("error in set binary value to statement: " + e.getMessage(), e);
+        }
+    }
+
+    public static void setArrayValue(Connection conn, PreparedStatement stmt, BValue value, int index, int direction,
+            int sqlType, String structuredSQLType) {
+        Object[] val = null;
+        if (value != null) {
+            val = value.stringValue().split(",");
+        }
+
+        try {
+            if (Constants.QueryParamDirection.IN == direction) {
+                if (value == null) {
+                    stmt.setNull(index + 1, sqlType);
+                } else {
+                    Array array = conn.createArrayOf(structuredSQLType, val);
+                    stmt.setArray(index + 1, array);
+                }
+            } else if (Constants.QueryParamDirection.INOUT == direction) {
+                if (value == null) {
+                    stmt.setNull(index + 1, sqlType);
+                } else {
+                    Array array = conn.createArrayOf(structuredSQLType, val);
+                    stmt.setArray(index + 1, array);
+                }
+                ((CallableStatement) stmt).registerOutParameter(index + 1, sqlType, structuredSQLType);
+            } else if (Constants.QueryParamDirection.OUT == direction) {
+                ((CallableStatement) stmt).registerOutParameter(index + 1, sqlType, structuredSQLType);
+            } else {
+                throw new BallerinaException("invalid direction for the parameter with index: " + index);
+            }
+        } catch (SQLException e) {
+            throw new BallerinaException("error in set array value to statement: " + e.getMessage(), e);
+        }
+    }
+
+    public static void setUserDefinedValue(Connection conn, PreparedStatement stmt, BValue value, int index,
+            int direction, int sqlType, String structuredSQLType) {
+        structuredSQLType = structuredSQLType.toUpperCase(Locale.getDefault());
+        Object[] val = null;
+        if (value != null) {
+            val = value.stringValue().split(",");
+        }
+
+        try {
+            if (Constants.QueryParamDirection.IN == direction) {
+                if (value == null) {
+                    stmt.setNull(index + 1, sqlType);
+                } else {
+                    Struct struct = conn.createStruct(structuredSQLType, val);
+                    stmt.setObject(index + 1, struct);
+                }
+            } else if (Constants.QueryParamDirection.INOUT == direction) {
+                if (value == null) {
+                    stmt.setNull(index + 1, sqlType);
+                } else {
+                    Struct struct = conn.createStruct(structuredSQLType, val);
+                    stmt.setObject(index + 1, struct);
+                }
+                ((CallableStatement) stmt)
+                        .registerOutParameter(index + 1, sqlType, structuredSQLType);
+            } else if (Constants.QueryParamDirection.OUT == direction) {
+                ((CallableStatement) stmt).registerOutParameter(index + 1, sqlType, structuredSQLType);
+            } else {
+                throw new BallerinaException("invalid direction for the parameter with index: " + index);
+            }
+        } catch (SQLException e) {
+            throw new BallerinaException("error in set struct value to statement: " + e.getMessage(), e);
         }
     }
 
@@ -580,6 +711,9 @@ public class SQLConnectorUtils {
      * @param data   clob data
      */
     public static String getString(Clob data) {
+        if (data == null) {
+            return null;
+        }
         try (Reader r = new BufferedReader(data.getCharacterStream())) {
             StringBuilder sb = new StringBuilder();
             int pos;
@@ -604,12 +738,28 @@ public class SQLConnectorUtils {
         // "pos - the ordinal position of the first byte in the BLOB value to be extracted;
         // the first byte is at position 1"
         // - https://docs.oracle.com/javase/7/docs/api/java/sql/Blob.html#getBytes(long,%20int)
+        if (data == null) {
+            return null;
+        }
         try {
             byte[] encode = getBase64Encode(
                     new String(data.getBytes(1L, (int) data.length()), Charset.defaultCharset()));
             return new String(encode, Charset.defaultCharset());
         } catch (SQLException e) {
             throw new BallerinaException("error occurred while reading BLOB value", e);
+        }
+    }
+
+    /**
+     * This will retrieve the string value for the given binary data.
+     *
+     * @param data binary data
+     */
+    public static String getString(byte[] data) {
+        if (data == null) {
+            return null;
+        } else {
+            return new String(data, Charset.defaultCharset());
         }
     }
 
@@ -625,6 +775,9 @@ public class SQLConnectorUtils {
     }
 
     public static String getString(Date value) {
+        if (value == null) {
+            return null;
+        }
         // lexical form of the date is '-'? yyyy '-' mm '-' dd zzzzzz?
         Calendar calendar = Calendar.getInstance();
         calendar.clear();
@@ -639,12 +792,18 @@ public class SQLConnectorUtils {
     }
 
     public static String getString(Timestamp sqlTimestamp) {
+        if (sqlTimestamp == null) {
+            return null;
+        }
         Calendar cal = Calendar.getInstance();
         cal.setTimeInMillis(sqlTimestamp.getTime());
         return getString(cal);
     }
 
     public static String getString(Time sqlTimestamp) {
+        if (sqlTimestamp == null) {
+            return null;
+        }
         Calendar cal = Calendar.getInstance();
         cal.setTimeInMillis(sqlTimestamp.getTime());
         return getString(cal);
@@ -662,6 +821,32 @@ public class SQLConnectorUtils {
         appendTime(value, dateString);
         appendTimeZone(value, dateString);
         return dateString.toString();
+    }
+
+    public static String getString(Array dataArray) throws SQLException {
+        if (dataArray == null) {
+            return null;
+        }
+        StringJoiner sj = new StringJoiner(",", "[", "]");
+        ResultSet rs = dataArray.getResultSet();
+        while (rs.next()) {
+            Object arrayEl = rs.getObject(2);
+            String val = String.valueOf(arrayEl);
+            sj.add(val);
+        }
+        return sj.toString();
+    }
+
+    public static String getString(Struct udt) throws SQLException {
+        if (udt.getAttributes() != null) {
+            StringJoiner sj = new StringJoiner(",", "{", "}");
+            Object[] udtValues = udt.getAttributes();
+            for (int i = 0; i < udtValues.length; i++) {
+                sj.add(String.valueOf(udtValues[i]));
+            }
+            return sj.toString();
+        }
+        return null;
     }
 
     private static byte[] getBytesFromBase64String(String base64Str) {
