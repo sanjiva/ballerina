@@ -31,6 +31,7 @@ definition
     |   typeMapperDefinition
     |   constantDefinition
     |   annotationDefinition
+    |   globalVariableDefinition
     ;
 
 serviceDefinition
@@ -81,6 +82,10 @@ structBody
 
 annotationDefinition
     : 'annotation' Identifier ('attach' attachmentPoint (',' attachmentPoint)*)? annotationBody
+    ;
+
+globalVariableDefinition
+    :   typeName Identifier ('=' expression )? ';'
     ;
 
 attachmentPoint
@@ -324,8 +329,8 @@ commentStatement
     ;
 
 variableReference
-    :   Identifier                                  # simpleVariableIdentifier// simple identifier
-    |   Identifier ('['expression']')+              # mapArrayVariableIdentifier// arrays and map reference
+    :   nameReference                               # simpleVariableIdentifier// simple identifier
+    |   nameReference ('['expression']')+           # mapArrayVariableIdentifier// arrays and map reference
     |   variableReference ('.' variableReference)+  # structFieldIdentifier// struct field reference
     ;
 
@@ -670,12 +675,13 @@ NullLiteral
     ;
 
 Identifier
-    :   Letter LetterOrDigit*
+    :   ( Letter LetterOrDigit* )
+    |   IdentifierLiteral
     ;
 
 fragment
 Letter
-    :   [a-zA-Z$_] // these are the "letters" below 0x7F
+    :   [a-zA-Z_] // these are the "letters" below 0x7F
     |   // covers all characters above 0x7F which are not a surrogate
         ~[\u0000-\u007F\uD800-\uDBFF]
     |   // covers UTF-16 surrogate pairs encodings for U+10000 to U+10FFFF
@@ -684,7 +690,7 @@ Letter
 
 fragment
 LetterOrDigit
-    :   [a-zA-Z0-9$_] // these are the "letters or digits" below 0x7F
+    :   [a-zA-Z0-9_] // these are the "letters or digits" below 0x7F
     |   // covers all characters above 0x7F which are not a surrogate
         ~[\u0000-\u007F\uD800-\uDBFF]
     |   // covers UTF-16 surrogate pairs encodings for U+10000 to U+10FFFF
@@ -701,3 +707,22 @@ WS  :  [ \t\r\n\u000C]+ -> skip
 LINE_COMMENT
     :   '//' ~[\r\n]*
     ;
+
+
+fragment
+IdentifierLiteral
+    : '|' IdentifierLiteralChar+ '|' ;
+
+fragment
+IdentifierLiteralChar
+    : ~[|\\\b\f\n\r\t]
+    | IdentifierLiteralEscapeSequence
+    ;
+
+fragment
+IdentifierLiteralEscapeSequence
+    : '\\' [|"\\/]
+    | '\\\\' [btnfr]
+    | UnicodeEscape
+    ;
+
