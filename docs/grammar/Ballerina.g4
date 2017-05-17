@@ -47,7 +47,7 @@ resourceDefinition
     ;
 
 callableUnitBody
-    : '{' workerDeclaration* statement* '}'
+    : '{' statement* workerDeclaration* '}'
     ;
 
 functionDefinition
@@ -123,7 +123,11 @@ constantDefinition
     ;
 
 workerDeclaration
-    :   'worker' Identifier '(' 'message' Identifier ')'  '{' statement* '}'
+    :   workerDefinition '{' statement* workerDeclaration*'}'
+    ;
+
+workerDefinition
+    :   'worker' Identifier
     ;
 
 typeName
@@ -205,6 +209,27 @@ statement
     |   commentStatement
     |   actionInvocationStatement
     |   functionInvocationStatement
+    |   transformStatement
+    |   transactionStatement
+    |   abortStatement
+    ;
+
+transformStatement
+    :   'transform' '{' transformStatementBody* '}'
+    ;
+
+transformStatementBody
+    :   expressionAssignmentStatement
+    |   expressionVariableDefinitionStatement
+    |   transformStatement
+    ;
+
+expressionAssignmentStatement
+    :   variableReferenceList '=' expression ';'
+    ;
+
+expressionVariableDefinitionStatement
+    :   typeName Identifier '=' expression ';'
     ;
 
 variableDefinitionStatement
@@ -270,7 +295,7 @@ breakStatement
 
 // typeName is only message
 forkJoinStatement
-    : 'fork' '(' variableReference ')' '{' workerDeclaration* '}' joinClause? timeoutClause?
+    : 'fork' '{' workerDeclaration* '}' joinClause? timeoutClause?
     ;
 
 // below typeName is only 'message[]'
@@ -316,12 +341,12 @@ workerInteractionStatement
 
 // below left Identifier is of type 'message' and the right Identifier is of type 'worker'
 triggerWorker
-    :   Identifier '->' Identifier ';'
+    :   expressionList '->' Identifier? ';'
     ;
 
 // below left Identifier is of type 'worker' and the right Identifier is of type 'message'
 workerReply
-    :   Identifier '<-' Identifier ';'
+    :   expressionList '<-' Identifier? ';'
     ;
 
 commentStatement
@@ -345,6 +370,18 @@ functionInvocationStatement
 actionInvocationStatement
     :   actionInvocation ';'
     |   variableReferenceList '=' actionInvocation ';'
+    ;
+
+transactionStatement
+    :   'transaction' '{' statement* '}' rollbackClause
+    ;
+
+rollbackClause
+    :   'aborted' '{' statement* '}'
+    ;
+
+abortStatement
+    :   'abort' ';'
     ;
 
 actionInvocation
@@ -701,7 +738,9 @@ LetterOrDigit
 // Whitespace and comments
 //
 
-WS  :  [ \t\r\n\u000C]+ -> skip
+WS  :  [ \t]+ -> channel(HIDDEN)
+    ;
+NEW_LINE  :  [\r\n\u000C]+ -> channel(HIDDEN)
     ;
 
 LINE_COMMENT

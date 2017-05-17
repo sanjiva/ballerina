@@ -99,6 +99,7 @@ import org.ballerinalang.model.expressions.TypeCastExpression;
 import org.ballerinalang.model.expressions.UnaryExpression;
 import org.ballerinalang.model.expressions.VariableRefExpr;
 import org.ballerinalang.model.invokers.MainInvoker;
+import org.ballerinalang.model.statements.AbortStmt;
 import org.ballerinalang.model.statements.ActionInvocationStmt;
 import org.ballerinalang.model.statements.AssignStmt;
 import org.ballerinalang.model.statements.BlockStmt;
@@ -111,6 +112,8 @@ import org.ballerinalang.model.statements.ReplyStmt;
 import org.ballerinalang.model.statements.ReturnStmt;
 import org.ballerinalang.model.statements.Statement;
 import org.ballerinalang.model.statements.ThrowStmt;
+import org.ballerinalang.model.statements.TransactionRollbackStmt;
+import org.ballerinalang.model.statements.TransformStmt;
 import org.ballerinalang.model.statements.TryCatchStmt;
 import org.ballerinalang.model.statements.VariableDefStmt;
 import org.ballerinalang.model.statements.WhileStmt;
@@ -134,6 +137,7 @@ import org.ballerinalang.model.values.BInteger;
 import org.ballerinalang.model.values.BString;
 import org.ballerinalang.natives.NativeUnitProxy;
 import org.ballerinalang.natives.typemappers.NativeCastMapper;
+import org.ballerinalang.runtime.worker.WorkerInteractionDataHolder;
 import org.ballerinalang.util.exceptions.BLangExceptionHelper;
 import org.ballerinalang.util.exceptions.LinkerException;
 import org.ballerinalang.util.exceptions.SemanticErrors;
@@ -147,6 +151,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Stack;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -164,12 +169,14 @@ public class SemanticAnalyzer implements NodeVisitor {
     private String currentPkg;
     private TypeLattice packageTypeLattice;
     private CallableUnit currentCallableUnit = null;
-    private CallableUnit parentCallableUnit = null;
+    private Stack<CallableUnit> parentCallableUnit = new Stack<>();
+    private Stack<SymbolScope> parentScope = new Stack<>();
     // following pattern matches ${anyString} or ${anyString[int]} or ${anyString["anyString"]}
     private static final String patternString = "\\$\\{((\\w+)(\\[(\\d+|\\\"(\\w+)\\\")\\])?)\\}";
     private static final Pattern compiledPattern = Pattern.compile(patternString);
 
     private int whileStmtCount = 0;
+    private int transactionStmtCount = 0;
     private SymbolScope currentScope;
     private SymbolScope nativeScope;
 
@@ -263,8 +270,9 @@ public class SemanticAnalyzer implements NodeVisitor {
             compilationUnit.accept(this);
         }
 
+        resolveWorkerInteractions(bLangPackage.getWorkerInteractionDataHolders());
         // Complete the package init function
-        ReturnStmt returnStmt = new ReturnStmt(pkgLocation, new Expression[0]);
+        ReturnStmt returnStmt = new ReturnStmt(pkgLocation, null, new Expression[0]);
         pkgInitFuncStmtBuilder.addStmt(returnStmt);
         functionBuilder.setBody(pkgInitFuncStmtBuilder.build());
         BallerinaFunction initFunction = functionBuilder.buildFunction();
@@ -310,7 +318,8 @@ public class SemanticAnalyzer implements NodeVisitor {
         ConstantLocation memLocation = new ConstantLocation(++staticMemAddrOffset);
         constDef.setMemoryLocation(memLocation);
 
-        VariableRefExpr varRefExpr = new VariableRefExpr(constDef.getNodeLocation(), constDef.getName());
+        VariableRefExpr varRefExpr = new VariableRefExpr(constDef.getNodeLocation(), constDef.getWhiteSpaceDescriptor(),
+                                                    constDef.getName());
         varRefExpr.setVariableDef(constDef);
         VariableDefStmt varDefStmt = new VariableDefStmt(constDef.getNodeLocation(),
                 constDef, varRefExpr, constDef.getRhsExpr());
@@ -406,8 +415,8 @@ public class SemanticAnalyzer implements NodeVisitor {
         }
 
         for (Worker worker : resource.getWorkers()) {
-            visit(worker);
             addWorkerSymbol(worker);
+            visit(worker);
         }
 
         BlockStmt blockStmt = resource.getResourceBody();
@@ -454,12 +463,16 @@ public class SemanticAnalyzer implements NodeVisitor {
 
         if (!function.isNative()) {
             for (Worker worker : function.getWorkers()) {
-                worker.accept(this);
                 addWorkerSymbol(worker);
+                worker.accept(this);
             }
 
             BlockStmt blockStmt = function.getCallableUnitBody();
             blockStmt.accept(this);
+
+            if (function.getReturnParameters().length > 0 && !blockStmt.isAlwaysReturns()) {
+                BLangExceptionHelper.throwSemanticError(function, SemanticErrors.MISSING_RETURN_STATEMENT);
+            }
         }
         // Here we need to calculate size of the BValue arrays which will be created in the stack frame
         // Values in the stack frame are stored in the following order.
@@ -570,12 +583,16 @@ public class SemanticAnalyzer implements NodeVisitor {
 
         if (!action.isNative()) {
             for (Worker worker : action.getWorkers()) {
-                worker.accept(this);
                 addWorkerSymbol(worker);
+                worker.accept(this);
             }
 
             BlockStmt blockStmt = action.getCallableUnitBody();
             blockStmt.accept(this);
+
+            if (action.getReturnParameters().length > 0 && !blockStmt.isAlwaysReturns()) {
+                BLangExceptionHelper.throwSemanticError(action, SemanticErrors.MISSING_RETURN_STATEMENT);
+            }
         }
 
         // Here we need to calculate size of the BValue arrays which will be created in the stack frame
@@ -597,9 +614,9 @@ public class SemanticAnalyzer implements NodeVisitor {
     @Override
     public void visit(Worker worker) {
         // Open a new symbol scope. This is done manually to avoid falling back to package scope
-        SymbolScope parentScope = currentScope;
+        parentScope.push(currentScope);
         currentScope = worker;
-        parentCallableUnit = currentCallableUnit;
+        parentCallableUnit.push(currentCallableUnit);
         currentCallableUnit = worker;
 
         // Check whether the return statement is missing. Ignore if the function does not return anything.
@@ -621,6 +638,15 @@ public class SemanticAnalyzer implements NodeVisitor {
             parameterDef.accept(this);
         }
 
+        // Define the worker at symbol scope so that workers defined within this worker can invoke this
+        // addWorkerSymbol(worker);
+
+        for (Worker worker2 : worker.getWorkers()) {
+            addWorkerSymbol(worker2);
+            worker2.accept(this);
+        }
+
+
         BlockStmt blockStmt = worker.getCallableUnitBody();
         blockStmt.accept(this);
 
@@ -636,9 +662,9 @@ public class SemanticAnalyzer implements NodeVisitor {
 
         // Close the symbol scope
         workerMemAddrOffset = -1;
-        currentCallableUnit = parentCallableUnit;
+        currentCallableUnit = parentCallableUnit.pop();
         // Close symbol scope. This is done manually to avoid falling back to package scope
-        currentScope = parentScope;
+        currentScope = parentScope.pop();
     }
 
     private void addWorkerSymbol(Worker worker) {
@@ -771,7 +797,7 @@ public class SemanticAnalyzer implements NodeVisitor {
                 BasicLiteral defaultValue = attributeDef.getAttributeValue();
                 if (defaultValue != null) {
                     annotation.addAttributeNameValuePair(attributeName,
-                        new AnnotationAttributeValue(defaultValue.getBValue(), defaultValue.getTypeName(), null));
+                        new AnnotationAttributeValue(defaultValue.getBValue(), defaultValue.getTypeName(), null, null));
                 }
                 continue;
             }
@@ -1046,11 +1072,22 @@ public class SemanticAnalyzer implements NodeVisitor {
                 BLangExceptionHelper.throwSemanticError(stmt,
                         SemanticErrors.BREAK_STMT_NOT_ALLOWED_HERE);
             }
-            if (stmt instanceof ReturnStmt || stmt instanceof ReplyStmt || stmt instanceof BreakStmt
-                    || stmt instanceof ThrowStmt) {
-                checkUnreachableStmt(blockStmt.getStatements(), ++stmtIndex);
+
+            if (stmt instanceof AbortStmt && transactionStmtCount < 1) {
+                BLangExceptionHelper.throwSemanticError(stmt,
+                        SemanticErrors.ABORT_STMT_NOT_ALLOWED_HERE);
             }
+
+            if (stmt instanceof BreakStmt || stmt instanceof ReplyStmt || stmt instanceof AbortStmt) {
+                checkUnreachableStmt(blockStmt.getStatements(), stmtIndex + 1);
+            }
+
             stmt.accept(this);
+
+            if (stmt.isAlwaysReturns()) {
+                checkUnreachableStmt(blockStmt.getStatements(), stmtIndex + 1);
+                blockStmt.setAlwaysReturns(true);
+            }
         }
 
         closeScope();
@@ -1063,6 +1100,7 @@ public class SemanticAnalyzer implements NodeVisitor {
 
     @Override
     public void visit(IfElseStmt ifElseStmt) {
+        boolean stmtReturns = true;
         Expression expr = ifElseStmt.getCondition();
         visitSingleValueExpr(expr);
 
@@ -1073,6 +1111,8 @@ public class SemanticAnalyzer implements NodeVisitor {
 
         Statement thenBody = ifElseStmt.getThenBody();
         thenBody.accept(this);
+
+        stmtReturns &= thenBody.isAlwaysReturns();
 
         for (IfElseStmt.ElseIfBlock elseIfBlock : ifElseStmt.getElseIfBlocks()) {
             Expression elseIfCondition = elseIfBlock.getElseIfCondition();
@@ -1085,12 +1125,19 @@ public class SemanticAnalyzer implements NodeVisitor {
 
             Statement elseIfBody = elseIfBlock.getElseIfBody();
             elseIfBody.accept(this);
+
+            stmtReturns &= elseIfBody.isAlwaysReturns();
         }
 
         Statement elseBody = ifElseStmt.getElseBody();
         if (elseBody != null) {
             elseBody.accept(this);
+            stmtReturns &= elseBody.isAlwaysReturns();
+        } else {
+            stmtReturns = false;
         }
+
+        ifElseStmt.setAlwaysReturns(stmtReturns);
     }
 
     @Override
@@ -1132,12 +1179,14 @@ public class SemanticAnalyzer implements NodeVisitor {
         throwStmt.getExpr().accept(this);
         if (throwStmt.getExpr() instanceof VariableRefExpr) {
             if (throwStmt.getExpr().getType() instanceof BExceptionType) {
+                throwStmt.setAlwaysReturns(true);
                 return;
             }
         } else {
             FunctionInvocationExpr funcIExpr = (FunctionInvocationExpr) throwStmt.getExpr();
             if (!funcIExpr.isMultiReturnExpr() && funcIExpr.getTypes().length > 0
                     && funcIExpr.getTypes()[0] instanceof BExceptionType) {
+                throwStmt.setAlwaysReturns(true);
                 return;
             }
         }
@@ -1158,52 +1207,61 @@ public class SemanticAnalyzer implements NodeVisitor {
 
     @Override
     public void visit(WorkerInvocationStmt workerInvocationStmt) {
-        VariableRefExpr variableRefExpr = workerInvocationStmt.getInMsg();
-        variableRefExpr.accept(this);
-
-        linkWorker(workerInvocationStmt);
-
-        //Find the return types of this function invocation expression.
-        ParameterDef[] returnParams = workerInvocationStmt.getCallableUnit().getReturnParameters();
-        BType[] returnTypes = new BType[returnParams.length];
-        for (int i = 0; i < returnParams.length; i++) {
-            returnTypes[i] = returnParams[i].getType();
+        Expression[] expressions = workerInvocationStmt.getExpressionList();
+        for (Expression expression : expressions) {
+            expression.accept(this);
         }
-        workerInvocationStmt.setTypes(returnTypes);
+
+        if (!workerInvocationStmt.getCallableUnitName().equals("default")) {
+            linkWorker(workerInvocationStmt);
+
+            //Find the return types of this function invocation expression.
+            ParameterDef[] returnParams = workerInvocationStmt.getCallableUnit().getReturnParameters();
+            BType[] returnTypes = new BType[returnParams.length];
+            for (int i = 0; i < returnParams.length; i++) {
+                returnTypes[i] = returnParams[i].getType();
+            }
+            workerInvocationStmt.setTypes(returnTypes);
+        }
     }
 
     @Override
     public void visit(WorkerReplyStmt workerReplyStmt) {
         String workerName = workerReplyStmt.getWorkerName();
         SymbolName workerSymbol = new SymbolName(workerName);
-        VariableRefExpr variableRefExpr = workerReplyStmt.getReceiveExpr();
-        variableRefExpr.accept(this);
-        
-        BLangSymbol worker = currentScope.resolve(workerSymbol);
-        if (!(worker instanceof Worker)) {
-            BLangExceptionHelper.throwSemanticError(variableRefExpr, SemanticErrors.INCOMPATIBLE_TYPES_UNKNOWN_FOUND, 
-                    workerSymbol);
+
+        Expression[] expressions = workerReplyStmt.getExpressionList();
+        for (Expression expression : expressions) {
+            expression.accept(this);
         }
-        
-        workerReplyStmt.setWorker((Worker) worker);
+
+        if (!workerName.equals("default")) {
+            BLangSymbol worker = currentScope.resolve(workerSymbol);
+            if (!(worker instanceof Worker)) {
+                BLangExceptionHelper.throwSemanticError(expressions[0], SemanticErrors.INCOMPATIBLE_TYPES_UNKNOWN_FOUND,
+                        workerSymbol);
+            }
+
+            workerReplyStmt.setWorker((Worker) worker);
+        }
     }
 
     @Override
     public void visit(ForkJoinStmt forkJoinStmt) {
+        boolean stmtReturns = true;
         //open the fork join statement scope
         openScope(forkJoinStmt);
-        // Visit incoming message
-        VariableRefExpr messageReference = forkJoinStmt.getMessageReference();
-        messageReference.accept(this);
-
-        if (!messageReference.getType().equals(BTypes.typeMessage)) {
-            throw new SemanticException("Incompatible types: expected a message in " +
-                    messageReference.getNodeLocation().getFileName() + ":" +
-                    messageReference.getNodeLocation().getLineNumber());
-        }
 
         // Visit workers
         for (Worker worker: forkJoinStmt.getWorkers()) {
+            /* Here we are setting the current stack frame size of the parent component (function, resource, action)
+            as the accessible stack frame size for fork-join internal workers. */
+            worker.setAccessibleStackFrameSize(stackFrameOffset + 1);
+
+            /* Actual worker memory segment starts after the current in-scope variables within the control stack.
+            Hence, we are adding the stackFrameOffset + 1 to begin with */
+            workerMemAddrOffset += stackFrameOffset + 1;
+
             worker.accept(this);
         }
 
@@ -1224,6 +1282,7 @@ public class SemanticAnalyzer implements NodeVisitor {
         // Visit join body
         Statement joinBody = join.getJoinBlock();
         joinBody.accept(this);
+        stmtReturns &= joinBody.isAlwaysReturns();
         closeScope();
 
         // Visit timeout condition
@@ -1247,10 +1306,26 @@ public class SemanticAnalyzer implements NodeVisitor {
         // Visit timeout body
         Statement timeoutBody = timeout.getTimeoutBlock();
         timeoutBody.accept(this);
+        stmtReturns &= timeoutBody.isAlwaysReturns();
         closeScope();
+
+        forkJoinStmt.setAlwaysReturns(stmtReturns);
 
         //closing the fork join statement scope
         closeScope();
+
+    }
+
+    @Override
+    public void visit(TransactionRollbackStmt transactionRollbackStmt) {
+        transactionStmtCount++;
+        transactionRollbackStmt.getTransactionBlock().accept(this);
+        transactionRollbackStmt.getRollbackBlock().getRollbackBlockStmt().accept(this);
+        transactionStmtCount--;
+    }
+
+    @Override
+    public void visit(AbortStmt abortStmt) {
 
     }
 
@@ -1285,6 +1360,10 @@ public class SemanticAnalyzer implements NodeVisitor {
             BLangExceptionHelper.throwSemanticError(returnStmt, SemanticErrors.RETURN_CANNOT_USED_IN_RESOURCE);
         }
 
+        if (transactionStmtCount > 0) {
+            BLangExceptionHelper.throwSemanticError(returnStmt, SemanticErrors.RETURN_CANNOT_USED_IN_TRANSACTION);
+        }
+
         // Expressions that this return statement contains.
         Expression[] returnArgExprs = returnStmt.getExprs();
 
@@ -1302,7 +1381,7 @@ public class SemanticAnalyzer implements NodeVisitor {
             Expression[] returnExprs = new Expression[returnParamsOfCU.length];
             for (int i = 0; i < returnParamsOfCU.length; i++) {
                 VariableRefExpr variableRefExpr = new VariableRefExpr(returnStmt.getNodeLocation(),
-                        returnParamsOfCU[i].getSymbolName());
+                        returnStmt.getWhiteSpaceDescriptor(), returnParamsOfCU[i].getSymbolName());
                 visit(variableRefExpr);
                 returnExprs[i] = variableRefExpr;
             }
@@ -1363,7 +1442,7 @@ public class SemanticAnalyzer implements NodeVisitor {
                             SemanticErrors.ACTION_INVOCATION_NOT_ALLOWED_IN_RETURN);
                 }
 
-                // Except for the first argument in return statement, fheck for FunctionInvocationExprs which return
+                // Except for the first argument in return statement, check for FunctionInvocationExprs which return
                 // multiple values.
                 if (returnArgExprs[i] instanceof FunctionInvocationExpr) {
                     FunctionInvocationExpr funcIExpr = ((FunctionInvocationExpr) returnArgExprs[i]);
@@ -1392,6 +1471,14 @@ public class SemanticAnalyzer implements NodeVisitor {
         }
     }
 
+    @Override
+    public void visit(TransformStmt transformStmt) {
+        BlockStmt blockStmt = transformStmt.getBody();
+        if (blockStmt.getStatements().length == 0) {
+            BLangExceptionHelper.throwSemanticError(transformStmt, SemanticErrors.TRANSFORM_STATEMENT_NO_BODY);
+        }
+        blockStmt.accept(this);
+    }
 
     // Expressions
 
@@ -1882,6 +1969,7 @@ public class SemanticAnalyzer implements NodeVisitor {
         int i = 0;
         if (literals.length > i) {
             BasicLiteral basicLiteral = new BasicLiteral(backtickExpr.getNodeLocation(),
+                    backtickExpr.getWhiteSpaceDescriptor(),
                     new SimpleTypeName(TypeConstants.STRING_TNAME), new BString(literals[i]));
             visit(basicLiteral);
             argExprList.add(basicLiteral);
@@ -1899,11 +1987,11 @@ public class SemanticAnalyzer implements NodeVisitor {
             if (m.group(3) != null) {
                 BasicLiteral indexExpr;
                 if (m.group(5) != null) {
-                    indexExpr = new BasicLiteral(backtickExpr.getNodeLocation(),
+                    indexExpr = new BasicLiteral(backtickExpr.getNodeLocation(), backtickExpr.getWhiteSpaceDescriptor(),
                             new SimpleTypeName(TypeConstants.STRING_TNAME), new BString(m.group(5)));
                     indexExpr.setType(BTypes.typeString);
                 } else {
-                    indexExpr = new BasicLiteral(backtickExpr.getNodeLocation(),
+                    indexExpr = new BasicLiteral(backtickExpr.getNodeLocation(), backtickExpr.getWhiteSpaceDescriptor(),
                             new SimpleTypeName(TypeConstants.INT_TNAME), new BInteger(Integer.parseInt(m.group(4))));
                     indexExpr.setType(BTypes.typeInt);
                 }
@@ -1913,7 +2001,8 @@ public class SemanticAnalyzer implements NodeVisitor {
                 ArrayMapAccessExpr.ArrayMapAccessExprBuilder builder =
                         new ArrayMapAccessExpr.ArrayMapAccessExprBuilder();
 
-                VariableRefExpr arrayMapVarRefExpr = new VariableRefExpr(backtickExpr.getNodeLocation(), mapOrArrName);
+                VariableRefExpr arrayMapVarRefExpr = new VariableRefExpr(backtickExpr.getNodeLocation(),
+                        backtickExpr.getWhiteSpaceDescriptor(), mapOrArrName);
                 visit(arrayMapVarRefExpr);
 
                 builder.setArrayMapVarRefExpr(arrayMapVarRefExpr);
@@ -1925,12 +2014,13 @@ public class SemanticAnalyzer implements NodeVisitor {
                 argExprList.add(arrayMapAccessExpr);
             } else {
                 VariableRefExpr variableRefExpr = new VariableRefExpr(backtickExpr.getNodeLocation(),
-                        new SymbolName(m.group(1), currentPkg));
+                        backtickExpr.getWhiteSpaceDescriptor(), new SymbolName(m.group(1), currentPkg));
                 visit(variableRefExpr);
                 argExprList.add(variableRefExpr);
             }
             if (literals.length > i) {
                 BasicLiteral basicLiteral = new BasicLiteral(backtickExpr.getNodeLocation(),
+                        backtickExpr.getWhiteSpaceDescriptor(),
                         new SimpleTypeName(TypeConstants.STRING_TNAME), new BString(literals[i]));
                 visit(basicLiteral);
                 argExprList.add(basicLiteral);
@@ -2157,7 +2247,8 @@ public class SemanticAnalyzer implements NodeVisitor {
                     !(lType.equals(BTypes.typeString)))) {
                 newEdge = TypeLattice.getImplicitCastLattice().getEdgeFromTypes(rType, lType, null);
                 if (newEdge != null) { // Implicit cast from right to left
-                    newExpr = new TypeCastExpression(rExpr.getNodeLocation(), rExpr, lType);
+                    newExpr = new TypeCastExpression(rExpr.getNodeLocation(), rExpr.getWhiteSpaceDescriptor(),
+                                                rExpr, lType);
                     newExpr.setEvalFunc(newEdge.getTypeMapperFunction());
                     newExpr.accept(this);
                     binaryExpr.setRExpr(newExpr);
@@ -2165,7 +2256,8 @@ public class SemanticAnalyzer implements NodeVisitor {
                 } else {
                     newEdge = TypeLattice.getImplicitCastLattice().getEdgeFromTypes(lType, rType, null);
                     if (newEdge != null) { // Implicit cast from left to right
-                        newExpr = new TypeCastExpression(lExpr.getNodeLocation(), lExpr, rType);
+                        newExpr = new TypeCastExpression(lExpr.getNodeLocation(), lExpr.getWhiteSpaceDescriptor(),
+                                lExpr, rType);
                         newExpr.setEvalFunc(newEdge.getTypeMapperFunction());
                         newExpr.accept(this);
                         binaryExpr.setLExpr(newExpr);
@@ -2545,7 +2637,6 @@ public class SemanticAnalyzer implements NodeVisitor {
     }
 
     private void linkWorker(WorkerInvocationStmt workerInvocationStmt) {
-
         String workerName = workerInvocationStmt.getCallableUnitName();
         SymbolName workerSymbolName = new SymbolName(workerName);
         Worker worker = (Worker) currentScope.resolve(workerSymbolName);
@@ -2658,7 +2749,8 @@ public class SemanticAnalyzer implements NodeVisitor {
         // Field of a struct is always a variable reference.
         if (fieldVar instanceof BasicLiteral) {
             String varName = ((BasicLiteral) fieldVar).getBValue().stringValue();
-            VariableRefExpr varRef = new VariableRefExpr(fieldVar.getNodeLocation(), varName);
+            VariableRefExpr varRef = new VariableRefExpr(fieldVar.getNodeLocation(), fieldVar.getWhiteSpaceDescriptor(),
+                    varName);
             fieldExpr.setVarRef(varRef);
             fieldExpr.setIsStaticField(true);
         }
@@ -2689,7 +2781,8 @@ public class SemanticAnalyzer implements NodeVisitor {
         } else {
             Expression varRefExpr = fieldExpr.getVarRef();
             varRefExpr.accept(this);
-            currentFieldExpr = new JSONFieldAccessExpr(fieldExpr.getNodeLocation(), varRefExpr, nextFieldExpr);
+            currentFieldExpr = new JSONFieldAccessExpr(fieldExpr.getNodeLocation(), fieldExpr.getWhiteSpaceDescriptor(),
+                    varRefExpr, nextFieldExpr);
         }
         parentExpr.setFieldExpr(currentFieldExpr);
         visitJSONAccessExpr(currentFieldExpr, nextFieldExpr);
@@ -2865,7 +2958,8 @@ public class SemanticAnalyzer implements NodeVisitor {
 
         newEdge = TypeLattice.getImplicitCastLattice().getEdgeFromTypes(rhsType, lhsType, null);
         if (newEdge != null) {
-            newExpr = new TypeCastExpression(rhsExpr.getNodeLocation(), rhsExpr, lhsType);
+            newExpr = new TypeCastExpression(rhsExpr.getNodeLocation(), rhsExpr.getWhiteSpaceDescriptor(),
+                    rhsExpr, lhsType);
             newExpr.setEvalFunc(newEdge.getTypeMapperFunction());
         }
         return newExpr;
@@ -3212,6 +3306,51 @@ public class SemanticAnalyzer implements NodeVisitor {
         }
     }
 
+    private void resolveWorkerInteractions(WorkerInteractionDataHolder[] workerInteractionDataHolders) {
+        for (WorkerInteractionDataHolder workerInteraction : workerInteractionDataHolders) {
+            if (workerInteraction.getSourceWorker() == null || workerInteraction.getWorkerReplyStmt() == null) {
+                // Invalid worker reply statement
+                // TODO: Need to have a specific error message
+                BLangExceptionHelper.throwSemanticError(workerInteraction.getWorkerInvocationStmt(),
+                        SemanticErrors.WORKER_INTERACTION_NOT_VALID);
+            }
+
+            if (workerInteraction.getTargetWorker() == null || workerInteraction.getWorkerInvocationStmt() == null) {
+                // Invalid worker invocation statement
+                // TODO: Need to have a specific error message
+                BLangExceptionHelper.throwSemanticError(workerInteraction.getWorkerReplyStmt(),
+                        SemanticErrors.WORKER_INTERACTION_NOT_VALID);
+            }
+
+            if (workerInteraction.getSourceWorker() == workerInteraction.getTargetWorker()) {
+                // Worker cannot invoke itself.
+                // TODO: Need to have a specific error message
+                    BLangExceptionHelper.throwSemanticError(workerInteraction.getWorkerReplyStmt(),
+                            SemanticErrors.WORKER_INTERACTION_NOT_VALID);
+            }
+
+            if (workerInteraction.getWorkerReplyStmt() != null && workerInteraction.getWorkerInvocationStmt() != null) {
+                // Check for number of variables send and received
+                Expression[] invokeParams = workerInteraction.getWorkerInvocationStmt().getExpressionList();
+                Expression[] receiveParams = workerInteraction.getWorkerReplyStmt().getExpressionList();
+                if (invokeParams.length != receiveParams.length) {
+                    // TODO: Need to have a specific error message
+                    BLangExceptionHelper.throwSemanticError(workerInteraction.getWorkerReplyStmt(),
+                            SemanticErrors.WORKER_INTERACTION_NOT_VALID);
+                } else {
+                    int i = 0;
+                    for (Expression invokeParam : invokeParams) {
+                        if (!(receiveParams[i++].getType().equals(invokeParam.getType()))) {
+                            // TODO: Need to have a specific error message
+                            BLangExceptionHelper.throwSemanticError(workerInteraction.getWorkerReplyStmt(),
+                                    SemanticErrors.WORKER_INTERACTION_NOT_VALID);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private void resolveStructFieldTypes(StructDef[] structDefs) {
         for (StructDef structDef : structDefs) {
             for (VariableDefStmt fieldDefStmt : structDef.getFieldDefStmts()) {
@@ -3249,7 +3388,7 @@ public class SemanticAnalyzer implements NodeVisitor {
                                 true, 1), currentScope, expr.getNodeLocation());
             } else if (fieldType == BTypes.typeJSON) {
                 refTypeInitExpr = new JSONArrayInitExpr(refTypeInitExpr.getNodeLocation(),
-                        refTypeInitExpr.getArgExprs());
+                        refTypeInitExpr.getWhiteSpaceDescriptor(), refTypeInitExpr.getArgExprs());
             }
         } else if (!(refTypeInitExpr instanceof BacktickExpr)) {
             // if the inherited type is any, then default this initializer to a map init expression
@@ -3257,11 +3396,14 @@ public class SemanticAnalyzer implements NodeVisitor {
                 fieldType = BTypes.typeMap;
             }
             if (fieldType == BTypes.typeMap) {
-                refTypeInitExpr = new MapInitExpr(refTypeInitExpr.getNodeLocation(), refTypeInitExpr.getArgExprs());
+                refTypeInitExpr = new MapInitExpr(refTypeInitExpr.getNodeLocation(),
+                        refTypeInitExpr.getWhiteSpaceDescriptor(), refTypeInitExpr.getArgExprs());
             } else if (fieldType == BTypes.typeJSON) {
-                refTypeInitExpr = new JSONInitExpr(refTypeInitExpr.getNodeLocation(), refTypeInitExpr.getArgExprs());
+                refTypeInitExpr = new JSONInitExpr(refTypeInitExpr.getNodeLocation(),
+                        refTypeInitExpr.getWhiteSpaceDescriptor(), refTypeInitExpr.getArgExprs());
             } else if (fieldType instanceof StructDef) {
-                refTypeInitExpr = new StructInitExpr(refTypeInitExpr.getNodeLocation(), refTypeInitExpr.getArgExprs());
+                refTypeInitExpr = new StructInitExpr(refTypeInitExpr.getNodeLocation(),
+                        refTypeInitExpr.getWhiteSpaceDescriptor(), refTypeInitExpr.getArgExprs());
             }
         }
         refTypeInitExpr.setInheritedType(fieldType);
@@ -3287,7 +3429,8 @@ public class SemanticAnalyzer implements NodeVisitor {
             // In maps and json, key is always a string literal.
             if (keyExpr instanceof VariableRefExpr) {
                 BString key = new BString(((VariableRefExpr) keyExpr).getVarName());
-                keyExpr = new BasicLiteral(keyExpr.getNodeLocation(), new SimpleTypeName(TypeConstants.STRING_TNAME),
+                keyExpr = new BasicLiteral(keyExpr.getNodeLocation(), keyExpr.getWhiteSpaceDescriptor(),
+                        new SimpleTypeName(TypeConstants.STRING_TNAME),
                         key);
                 keyValueExpr.setKeyExpr(keyExpr);
             }
@@ -3322,9 +3465,8 @@ public class SemanticAnalyzer implements NodeVisitor {
     private void addDependentPkgInitCalls(List<BallerinaFunction> initFunctionList,
         BlockStmt.BlockStmtBuilder blockStmtBuilder, NodeLocation initFuncLocation) {
         for (BallerinaFunction initFunc : initFunctionList) {
-            FunctionInvocationExpr funcIExpr = new FunctionInvocationExpr(initFuncLocation,
-                    initFunc.getName(), null,
-                initFunc.getPackagePath(), new Expression[] {});
+            FunctionInvocationExpr funcIExpr = new FunctionInvocationExpr(initFuncLocation, null,
+                    initFunc.getName(), null, initFunc.getPackagePath(), new Expression[] {});
             funcIExpr.setCallableUnit(initFunc);
             FunctionInvocationStmt funcIStmt = new FunctionInvocationStmt(initFuncLocation, funcIExpr);
             blockStmtBuilder.addStmt(funcIStmt);

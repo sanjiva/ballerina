@@ -30,6 +30,7 @@ import org.ballerinalang.bre.ServiceVarLocation;
 import org.ballerinalang.bre.StackFrame;
 import org.ballerinalang.bre.StackVarLocation;
 import org.ballerinalang.bre.StructVarLocation;
+import org.ballerinalang.bre.WorkerExecutor;
 import org.ballerinalang.bre.WorkerRunner;
 import org.ballerinalang.bre.WorkerVarLocation;
 import org.ballerinalang.model.Action;
@@ -98,8 +99,10 @@ import org.ballerinalang.model.nodes.fragments.statements.ForkJoinStartNode;
 import org.ballerinalang.model.nodes.fragments.statements.ReplyStmtEndNode;
 import org.ballerinalang.model.nodes.fragments.statements.ReturnStmtEndNode;
 import org.ballerinalang.model.nodes.fragments.statements.ThrowStmtEndNode;
+import org.ballerinalang.model.nodes.fragments.statements.TransactionRollbackStmtEndNode;
 import org.ballerinalang.model.nodes.fragments.statements.TryCatchStmtEndNode;
 import org.ballerinalang.model.nodes.fragments.statements.VariableDefStmtEndNode;
+import org.ballerinalang.model.statements.AbortStmt;
 import org.ballerinalang.model.statements.ActionInvocationStmt;
 import org.ballerinalang.model.statements.AssignStmt;
 import org.ballerinalang.model.statements.BlockStmt;
@@ -112,6 +115,8 @@ import org.ballerinalang.model.statements.IfElseStmt;
 import org.ballerinalang.model.statements.ReplyStmt;
 import org.ballerinalang.model.statements.ReturnStmt;
 import org.ballerinalang.model.statements.ThrowStmt;
+import org.ballerinalang.model.statements.TransactionRollbackStmt;
+import org.ballerinalang.model.statements.TransformStmt;
 import org.ballerinalang.model.statements.TryCatchStmt;
 import org.ballerinalang.model.statements.VariableDefStmt;
 import org.ballerinalang.model.statements.WhileStmt;
@@ -313,18 +318,14 @@ public abstract class BLangAbstractExecutionVisitor extends BLangExecutionVisito
         int sizeOfValueArray = worker.getStackFrameSize();
         BValue[] localVals = new BValue[sizeOfValueArray];
 
+        // Get values for all the worker arguments
+        int valueCounter = 0;
         // Evaluate the argument expression
-        BValue argValue = getTempValue(workerInvocationStmt.getInMsg());
-
-        if (argValue instanceof BMessage) {
-            argValue = ((BMessage) argValue).clone();
+        Expression[] expressions = workerInvocationStmt.getExpressionList();
+        for (Expression expression : expressions) {
+            localVals[valueCounter++] = getTempValue(expression);
         }
 
-        // Setting argument value in the stack frame
-        localVals[0] = argValue;
-
-        // Get values for all the worker arguments
-        int valueCounter = 1;
 
         for (ParameterDef returnParam : worker.getReturnParameters()) {
             // Check whether these are unnamed set of return types.
@@ -354,9 +355,10 @@ public abstract class BLangAbstractExecutionVisitor extends BLangExecutionVisito
         BLangExecutor workerExecutor = new BLangExecutor(runtimeEnv, workerContext);
 
         executor = Executors.newSingleThreadExecutor(new BLangThreadFactory(worker.getName()));
-        WorkerRunner workerRunner = new WorkerRunner(workerExecutor, workerContext, worker);
-        Future<BMessage> future = executor.submit(workerRunner);
-        worker.setResultFuture(future);
+        WorkerExecutor workerRunner = new WorkerExecutor(workerExecutor, workerContext, worker);
+        executor.submit(workerRunner);
+//        Future<BMessage> future = executor.submit(workerRunner);
+//        worker.setResultFuture(future);
     }
 
     @Override
@@ -369,8 +371,10 @@ public abstract class BLangAbstractExecutionVisitor extends BLangExecutionVisito
         Future<BMessage> future = worker.getResultFuture();
         try {
             BMessage result = future.get(60, TimeUnit.SECONDS);
-            VariableRefExpr variableRefExpr = workerReplyStmt.getReceiveExpr();
-            assignValueToVarRefExpr(result, variableRefExpr);
+            Expression[] expressions = workerReplyStmt.getExpressionList();
+            for (Expression expression: expressions) {
+                assignValueToVarRefExpr(result, (VariableRefExpr) expression);
+            }
             executor.shutdown();
             if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
                 executor.shutdownNow();
@@ -378,8 +382,11 @@ public abstract class BLangAbstractExecutionVisitor extends BLangExecutionVisito
         } catch (Exception e) {
             // If there is an exception in the worker, set an empty value to the return variable
             BMessage result = BTypes.typeMessage.getEmptyValue();
-            VariableRefExpr variableRefExpr = workerReplyStmt.getReceiveExpr();
-            assignValueToVarRefExpr(result, variableRefExpr);
+            Expression[] expressions = workerReplyStmt.getExpressionList();
+            for (Expression expression: expressions) {
+                assignValueToVarRefExpr(result, (VariableRefExpr) expression);
+            }
+
         } finally {
             // Finally, try again to shutdown if not done already
             executor.shutdownNow();
@@ -392,6 +399,31 @@ public abstract class BLangAbstractExecutionVisitor extends BLangExecutionVisito
             logger.debug("Executing WhileStmt {}", getNodeLocation(whileStmt.getNodeLocation()));
         }
         next = whileStmt.next;
+    }
+
+    @Override
+    public void visit(TransformStmt transformStmt) {
+        if (logger.isDebugEnabled()) {
+            logger.debug("Executing TransformStmt {}", getNodeLocation(transformStmt.getNodeLocation()));
+        }
+        next = transformStmt.next;
+    }
+
+    @Override
+    public void visit(TransactionRollbackStmt transactionRollbackStmt) {
+        if (logger.isDebugEnabled()) {
+            logger.debug("Executing TransactionRollbackStmt {}",
+                    getNodeLocation(transactionRollbackStmt.getNodeLocation()));
+        }
+        next = transactionRollbackStmt.next;
+    }
+
+    @Override
+    public void visit(AbortStmt abortStmt) {
+        if (logger.isDebugEnabled()) {
+            logger.debug("Executing AbortStmt {}", getNodeLocation(abortStmt.getNodeLocation()));
+        }
+        next = abortStmt.next;
     }
 
     /* Expression nodes */
@@ -1401,6 +1433,14 @@ public abstract class BLangAbstractExecutionVisitor extends BLangExecutionVisito
 
         StackFrame stackFrame = new StackFrame(localVals, returnVals, functionInfo);
         controlStack.pushFrame(stackFrame);
+    }
+
+    @Override
+    public void visit(TransactionRollbackStmtEndNode transactionRollbackStmtEndNode) {
+        if (logger.isDebugEnabled()) {
+            logger.debug("Executing TransactionRollbackStmt - EndNode");
+        }
+        next = transactionRollbackStmtEndNode.next;
     }
 
     @Override

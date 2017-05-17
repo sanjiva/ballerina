@@ -46,6 +46,7 @@ import java.util.Map;
  */
 public class BallerinaAction implements Action, SymbolScope, Node {
     private NodeLocation location;
+    private WhiteSpaceDescriptor whiteSpaceDescriptor;
 
     // BLangSymbol related attributes
     protected Identifier identifier;
@@ -187,6 +188,15 @@ public class BallerinaAction implements Action, SymbolScope, Node {
         return location;
     }
 
+    public void setWhiteSpaceDescriptor(WhiteSpaceDescriptor whiteSpaceDescriptor) {
+        this.whiteSpaceDescriptor = whiteSpaceDescriptor;
+    }
+
+    @Override
+    public WhiteSpaceDescriptor getWhiteSpaceDescriptor() {
+        return whiteSpaceDescriptor;
+    }
+
     // Methods in BLangSymbol interface
 
     @Override
@@ -275,6 +285,7 @@ public class BallerinaAction implements Action, SymbolScope, Node {
 
         public BallerinaAction buildAction() {
             bAction.location = this.location;
+            bAction.whiteSpaceDescriptor = this.whiteSpaceDescriptor;
             bAction.identifier = this.identifier;
             bAction.pkgPath = this.pkgPath;
             bAction.symbolName = new SymbolName(identifier.getName(), pkgPath);
@@ -282,6 +293,10 @@ public class BallerinaAction implements Action, SymbolScope, Node {
             bAction.annotations = this.annotationList.toArray(new AnnotationAttachment[this.annotationList.size()]);
             bAction.parameterDefs = this.parameterDefList.toArray(new ParameterDef[this.parameterDefList.size()]);
             bAction.returnParams = this.returnParamList.toArray(new ParameterDef[this.returnParamList.size()]);
+            // Set the parameters to the workers if there are any
+            for (Worker worker : this.workerList) {
+                worker.setParameterDefs(bAction.getParameterDefs());
+            }
             bAction.workers = this.workerList.toArray(new Worker[this.workerList.size()]);
             bAction.actionBody = this.body;
             bAction.isNative = this.isNative;
