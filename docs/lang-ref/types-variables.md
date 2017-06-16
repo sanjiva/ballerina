@@ -51,8 +51,17 @@ Ballerina includes the following value types:
 - int
 - float
 - string
+- blob
 
 The types `int` and `float` both support 64-bit IEEE754 arithmetic. The `boolean` type has only two values: `true` and `false`. The `string` type operates similar to value types in that assignment and comparison involve the full value and not the pointer.
+
+The `blob` type in Ballerina is used to represent a sequence of bytes. Currently there are two different ways to create a blob value.
+- A string can be converted to a blob using the `toBlob` function in the strings package.
+- A file can be read into a blob using the `read` function of the Ballerina file API.
+
+The following functionalities can be achieved using the 'blob' value type.
+- A blob can be converted to a string using the `toString` function in the blobs package.
+- A blob can be written or appended to a file using the `write` function in the Ballerina file API.
 
 Value types can be initialized at declaration by assigning a value of that type. If they are not initialized, they have the following default values: 
 
@@ -60,6 +69,7 @@ Value types can be initialized at declaration by assigning a value of that type.
 - float: 0.0
 - string: "" (empty string, not null)
 - boolean: false
+- blob: null (blobs can only be populated using a function)
 
 ## User-defined reference types
 
@@ -197,28 +207,48 @@ Library functions for manipulating XML documents and elements are in the package
 
 ### Type: `json`
 
-A variable of type `json` can hold any JSON document. Ballerina also understands JSON Schema and allows you to declare that a JSON document must conform to a particular schema.
+JSON is a textual format for representing a collection of values: a simple value (string, number, “true”, “false”, “null”), an array of values or an object. Ballerina also understands the JSON Schema and allows one to declare that a JSON document must conform to a particular schema.
 
-JSON variables are declared in either of the following ways:
+Ballerina has a variable type named “json” that can represent any JSON value. Thus it is a built-in union type in Ballerina whose value can be any one of a string, a float, a boolean, an array of any or a map of any. We provide utility functions to read a JSON document to create a JSON typed value. The lexical representation of a value of that type is JSON, thus simply printing a JSON typed variable results in a JSON string.
 
+JSON variables are declared in the following way:
 ```
 json VariableName;
-json<SchemaName> VariableName;
 ```
+This is a variable that may hold any JSON document.
 
-The first approach is a variable that can hold any JSON document. The second approach is a variable whose value is a document that is of the indicated JSON Schema.
+Ballerina will not always perform runtime schema validation as that will inhibit performance - instead a library function will allow that to be done on demand. For better performance a Ballerina implementation is expected to stream the contents of JSON documents and only load into memory what is needed based on how the document is used in the program.
+
+> NOTE: The Ballerina runtime implementation in version 0.8 does not currently support the scheme constraining mechanism explained above.
 
 Literal JSON values can be assigned to `json` typed variables as follows:
 
 ```
-json VariableName = `{"PropertyName" : "Value", "PropertyName": "Value", ...}`;
+json VariableName = {"PropertyName" : "Value", "PropertyName": "Value", ...};
 ```
 
-Within the literal JSON expression (enclosed within back quote characters), other in-scope variables can be referred to using the syntax `${VariableName}`, which will be replaced by the value of the variable.
+Within the literal JSON expression, other in-scope variables can be referred to use the syntax `VariableName` and that is replaced by the value of the variable.
 
-Library functions for manipulating XML documents and elements are in the package `ballerina.lang.jsons`.
+> NOTE: We are considering allowing the value of a property to be an expression.
 
-> NOTE: We are considering a deeper marriage of JSON types and structs. This is because a JSON document with its properties can be viewed as being analogous to a struct with fields. Some of the deeper integration we are considering is the ability to use dot notation (similar to the syntax for accessing fields of a struct) to navigate through a JSON document, instead of the current approach of using a library function.
+A field of any of these three types can be accessed by using “.” or using array indexing:
+
+```
+struct address {
+  string city;
+  string country;
+}
+
+address a1 = { city : “Colombo”, “country” : “Sri Lanka” };
+json j = { city : “Colombo”, “country” : “Sri Lanka” };
+map m = { city : “Colombo”, “country” : “Sri Lanka” };
+
+system:println (a1.city, a1[“country”]);
+system:println (j.city, j[“country”]);
+system:println (m.city, m[“country”]);
+```
+
+If the accessed field does not exist, in the case of a struct there will be a compile-time error, while the other cases will result in a null value being returned.
 
 ### Type: `datatable`
 
