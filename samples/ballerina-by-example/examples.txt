@@ -24,6 +24,12 @@ JSON Literals
 JSON Arrays
 JSON/Struct/Map Conversion
 XML
+XML Namespaces
+XML Literal
+XML Attributes
+XML Functions
+JSON To XML Conversion
+XML To JSON Conversion
 Worker
 Worker Interaction
 Fork/Join
@@ -39,4 +45,9 @@ Base Path and Path
 Query and Path Param
 Content Based Routing
 Header Based Routing
+Produces/Consumes
 HTTP Sessions
+File System Server Connector
+FTP Client Connector
+FTP Server Connector
+Log API
