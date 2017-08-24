@@ -52,6 +52,7 @@ import org.wso2.carbon.messaging.CarbonCallback;
 import org.wso2.carbon.messaging.CarbonMessage;
 import org.wso2.carbon.messaging.ServerConnectorErrorHandler;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -94,7 +95,9 @@ public class ServerConnectorMessageHandler {
 
             // Find the Resource
             ResourceInfo resource = resourceDispatcher.findResource(service, cMsg, callback);
-            invokeResource(cMsg, callback, protocol, resource, service);
+            if (resource != null) {
+                invokeResource(cMsg, callback, protocol, resource, service);
+            }
         } catch (Throwable throwable) {
             handleError(cMsg, callback, throwable);
         }
@@ -151,6 +154,13 @@ public class ServerConnectorMessageHandler {
         context.setServiceInfo(serviceInfo);
         context.setCarbonMessage(resourceMessage);
         context.setBalCallback(new DefaultBalCallback(resourceCallback));
+
+        Map<String, Object> properties = null;
+        if (resourceMessage.getProperty(Constants.SRC_HANDLER) != null) {
+            Object srcHandler = resourceMessage.getProperty(Constants.SRC_HANDLER);
+            context.setProperty(Constants.SRC_HANDLER, srcHandler);
+            properties = Collections.singletonMap(Constants.SRC_HANDLER, srcHandler);
+        }
         ControlStackNew controlStackNew = context.getControlStackNew();
 
         // Now create callee's stack-frame
@@ -225,7 +235,7 @@ public class ServerConnectorMessageHandler {
         callerSF.setRefRegs(new BRefType[1]);
         callerSF.getRefRegs()[0] = refLocalVars[0];
         int[] retRegs = {0};
-        BLangVMWorkers.invoke(packageInfo.getProgramFile(), resourceInfo, callerSF, retRegs);
+        BLangVMWorkers.invoke(packageInfo.getProgramFile(), resourceInfo, callerSF, retRegs, properties);
 
         BLangVM bLangVM = new BLangVM(packageInfo.getProgramFile());
         if (VMDebugManager.getInstance().isDebugEnabled() && VMDebugManager.getInstance().isDebugSessionActive()) {

@@ -2,25 +2,6 @@ package ballerina.net.http;
 
 import ballerina.net.ws;
 
-annotation GET attach resource {
-}
-
-annotation POST attach resource {
-}
-
-annotation PUT attach resource {
-}
-
-annotation DELETE attach resource {
-}
-
-annotation HEAD attach resource {
-}
-
-annotation Path attach resource {
-    string value;
-}
-
 annotation configuration attach service<>, service<ws> {
     string host;
     int port;
@@ -29,6 +10,25 @@ annotation configuration attach service<>, service<ws> {
     string keyStoreFile;
     string keyStorePass;
     string certPass;
+    string[] allowOrigins;
+    boolean allowCredentials;
+    string[] allowMethods;
+    string[] allowHeaders;
+    int maxAge;
+    string[] exposeHeaders;
+}
+
+annotation resourceConfig attach resource {
+    string[] methods;
+    string path;
+    string[] consumes;
+    string[] produces;
+    string[] allowOrigins;
+    boolean allowCredentials;
+    string[] allowMethods;
+    string[] allowHeaders;
+    int maxAge;
+    string[] exposeHeaders;
 }
 
 annotation PathParam attach parameter {
@@ -37,12 +37,4 @@ annotation PathParam attach parameter {
 
 annotation QueryParam attach parameter {
     string value;
-}
-
-annotation Consumes attach resource {
-    string[] value;
-}
-
-annotation Produces attach resource {
-    string[] value;
 }

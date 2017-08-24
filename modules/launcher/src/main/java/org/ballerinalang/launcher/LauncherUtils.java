@@ -22,6 +22,7 @@ import org.ballerinalang.BLangProgramLoader;
 import org.ballerinalang.BLangProgramRunner;
 import org.ballerinalang.natives.connectors.BallerinaConnectorManager;
 import org.ballerinalang.runtime.model.BLangRuntimeRegistry;
+import org.ballerinalang.runtime.threadpool.ThreadPoolFactory;
 import org.ballerinalang.services.MessageProcessor;
 import org.ballerinalang.util.BLangConstants;
 import org.ballerinalang.util.codegen.ProgramFile;
@@ -41,6 +42,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Contains utility methods for executing a Ballerina program.
@@ -48,7 +50,6 @@ import java.util.List;
  * @since 0.8.0
  */
 public class LauncherUtils {
-    public static final String BALLERINA_HOME = "ballerina.home";
 
     public static void runProgram(Path sourceRootPath, Path sourcePath, boolean runServices, String[] args) {
         ProgramFile programFile;
@@ -80,11 +81,16 @@ public class LauncherUtils {
         BallerinaConnectorManager.getInstance().setMessageProcessor(new MessageProcessor());
 
         BLangProgramRunner.runMain(programFile, args);
+        try {
+            ThreadPoolFactory.getInstance().getWorkerExecutor().shutdown();
+            ThreadPoolFactory.getInstance().getWorkerExecutor().awaitTermination(10000, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException ex) {
+            // Ignore the error
+        }
         Runtime.getRuntime().exit(0);
     }
 
     private static void runServices(ProgramFile programFile) {
-        LauncherUtils.writePID(System.getProperty(BALLERINA_HOME));
         PrintStream outStream = System.out;
 
         // TODO : Fix this properly.
@@ -99,6 +105,12 @@ public class LauncherUtils {
                     .startPendingConnectors();
             startedConnectors.forEach(serverConnector -> outStream.println("ballerina: started server connector " +
                     serverConnector));
+
+            // Starting up HTTP Server connectors
+            List<org.wso2.carbon.transport.http.netty.contract.ServerConnector> startedHTTPConnectors =
+                    BallerinaConnectorManager.getInstance().startPendingHTTPConnectors();
+            startedHTTPConnectors.forEach(serverConnector -> outStream.println("ballerina: started server connector " +
+                                                                                       serverConnector));
         } catch (ServerConnectorException e) {
             throw new RuntimeException("error starting server connectors: " + e.getMessage(), e);
         }
