@@ -1,5 +1,4 @@
 import ballerina.net.http;
-import ballerina.doc;
 
 service<http> sample {
 
@@ -7,9 +6,9 @@ service<http> sample {
         methods:["GET"],
         path:"/path/{foo}"
     }
-    @doc:Description {value:"PathParam and QueryParam extract values from the request URI."}
+    @Description {value:"PathParam and QueryParam extract values from the request URI."}
     resource params (http:Request req, http:Response res, string foo) {
-        // Get QueryParam
+        // Get QueryParam.
         map params = req.getQueryParams();
         var bar, _ = (string)params.bar;
         // Create json payload with the extracted values.

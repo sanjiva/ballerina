@@ -82,6 +82,9 @@ public class Constants {
     public static final String ANN_CONFIG_ATTR_SSL_ENABLED_PROTOCOLS = "sslEnabledProtocols";
     public static final String ANN_CONFIG_ATTR_CIPHERS = "ciphers";
     public static final String ANN_CONFIG_ATTR_SSL_PROTOCOL = "sslProtocol";
+    public static final String ANN_CONFIG_ATTR_WEBSOCKET = "webSocket";
+    public static final String ANN_WEBSOCKET_ATTR_UPGRADE_PATH = "upgradePath";
+    public static final String ANN_WEBSOCKET_ATTR_SERVICE_NAME = "serviceName";
     public static final String ANNOTATION_METHOD_GET = HTTP_METHOD_GET;
     public static final String ANNOTATION_METHOD_POST = HTTP_METHOD_POST;
     public static final String ANNOTATION_METHOD_PUT = HTTP_METHOD_PUT;
@@ -117,7 +120,7 @@ public class Constants {
     public static final String RESOURCES_CORS = "RESOURCES_CORS";
 
 
-    public static final String CONNECTOR_NAME = "ClientConnector";
+    public static final String CONNECTOR_NAME = "HttpClient";
 
     public static final String REQUEST_URL = "REQUEST_URL";
     public static final String SRC_HANDLER = "SRC_HANDLER";
@@ -129,8 +132,10 @@ public class Constants {
     public static final String HTTP_CLIENT_EXCEPTION_CATEGORY = "http-client";
     public static final String REQUEST = "Request";
     public static final String RESPONSE = "Response";
+    public static final String HTTP_CONNECTOR_ERROR = "HttpConnectorError";
     public static final String TYPE_STRING = "string";
     public static final String TRANSPORT_MESSAGE = "transport_message";
+    public static final String INBOUND_REQUEST = "inbound_request";
     public static final String OUTBOUND_RESPONSE = "outbound_response";
     public static final String HTTP_SESSION = "http_session";
 
@@ -151,6 +156,11 @@ public class Constants {
     public static final int SSL_ENABLED_PROTOCOLS_INDEX = 4;
     public static final int CIPHERS_INDEX = 5;
     public static final int SSL_PROTOCOL_INDEX = 6;
+
+    //Retry Struct indexes
+    public static final int RETRY_STRUCT_INDEX = 2;
+    public static final int RETRY_COUNT_INDEX = 0;
+    public static final int RETRY_INTERVAL_INDEX = 1;
 
     /**
      * Content type HTTP header.
