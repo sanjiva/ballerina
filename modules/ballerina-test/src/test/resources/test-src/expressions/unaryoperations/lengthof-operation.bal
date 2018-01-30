@@ -138,3 +138,41 @@ function arrayLengthAccessTestJSONArrayNegativeNonArrayCase (int x, int y) (int)
     length = (lengthof arr);
     return length;
 }
+
+
+function lengthOfMap (int x, int y) (int) {
+    map namesMap = {fname:"Supun", lname:"Setunga", sname:"Kevin", tname:"Ratnasekera"};
+    int length = lengthof namesMap;
+    return length;
+}
+
+function lengthOfMapEmpty (int x, int y) (int) {
+    map namesMap = {};
+    int length = lengthof namesMap;
+    return length;
+}
+
+function lengthOfString() (int, int, int) {
+    string foo = "hello world";
+    int l1 = lengthof foo;
+    int l2 = lengthof "John";
+    int l3 = lengthof string `Hello {{"John"}}`;
+    return l1, l2, l3;
+}
+
+function lengthOfBlob() (int, int) {
+    string s1 = "Hello";
+	blob b1 = s1.toBlob("UTF-8");
+    int l1 = lengthof b1;
+    
+    string s2 = "";
+    blob b2 = s2.toBlob("UTF-8");
+    int l2 = lengthof b2;
+    
+    return l1, l2;
+}
+
+function lengthOfNullString() (int) {
+    string foo;
+    return lengthof foo;
+}

@@ -24,10 +24,8 @@ import org.ballerinalang.model.util.XMLNodeType;
 import org.ballerinalang.runtime.message.BallerinaMessageDataSource;
 import org.ballerinalang.util.exceptions.BallerinaException;
 
-import java.io.OutputStream;
 import java.util.Iterator;
 import java.util.List;
-
 import javax.xml.namespace.QName;
 
 /**
@@ -44,10 +42,8 @@ import javax.xml.namespace.QName;
  *
  * @since 0.8.0
  */
-public abstract class BXML<T> extends BallerinaMessageDataSource implements BRefType<T> {
+public abstract class BXML<T> extends BallerinaMessageDataSource implements BRefType<T>, BCollection {
 
-    protected OutputStream outputStream;
-    
     /**
      * Start of a XML comment.
      */
@@ -67,8 +63,6 @@ public abstract class BXML<T> extends BallerinaMessageDataSource implements BRef
      * End of a XML processing instruction.
      */
     public static final String PI_END = "?>";
-    
-    public static final String ZERO_STRING_VALUE = "";
     
     /**
      * Check whether the XML sequence is empty.
@@ -235,6 +229,7 @@ public abstract class BXML<T> extends BallerinaMessageDataSource implements BRef
     /**
      * Get an item from the XML sequence, at the given index.
      * 
+     * @param index Index of the item to retrieve
      * @return Item at the given index in the sequence
      */
     public abstract BXML<?> getItem(long index);
@@ -245,6 +240,11 @@ public abstract class BXML<T> extends BallerinaMessageDataSource implements BRef
      * @return length of this XML sequence.
      */
     public abstract int length();
+
+    /**
+     * Builds itself.
+     */
+    public abstract void build();
 
     /**
      * {@inheritDoc}
@@ -277,15 +277,7 @@ public abstract class BXML<T> extends BallerinaMessageDataSource implements BRef
     public BallerinaMessageDataSource clone() {
         return copy();
     }
-    
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public void setOutputStream(OutputStream outputStream) {
-        this.outputStream = outputStream;
-    }
-    
+
     // private methods
     
     protected static void handleXmlException(String message, Throwable t) {

@@ -34,6 +34,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -45,7 +46,7 @@ import java.util.stream.Collectors;
  * @since 0.94
  */
 public class GeneralFSPackageRepository implements PackageRepository {
-    
+
     private static final String BAL_SOURCE_EXT = ".bal";
 
     protected Path basePath;
@@ -54,7 +55,7 @@ public class GeneralFSPackageRepository implements PackageRepository {
         this.basePath = basePath;
     }
 
-    private PackageSource lookupPackageSource(PackageID pkgID) {
+    protected PackageSource lookupPackageSource(PackageID pkgID) {
         Path path = this.generatePath(pkgID);
         if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
             return null;
@@ -62,7 +63,7 @@ public class GeneralFSPackageRepository implements PackageRepository {
         return new FSPackageSource(pkgID, path);
     }
 
-    private PackageSource lookupPackageSource(PackageID pkgID, String entryName) {
+    protected PackageSource lookupPackageSource(PackageID pkgID, String entryName) {
         Path path = this.generatePath(pkgID);
         if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
             return null;
@@ -99,7 +100,7 @@ public class GeneralFSPackageRepository implements PackageRepository {
         }
         return name;
     }
-    
+
     private boolean isBALFile(Path path) {
         return !Files.isDirectory(path) && path.getFileName().toString().endsWith(BAL_SOURCE_EXT);
     }
@@ -108,6 +109,9 @@ public class GeneralFSPackageRepository implements PackageRepository {
     public Set<PackageID> listPackages(int maxDepth) {
         if (maxDepth <= 0) {
             throw new IllegalArgumentException("maxDepth must be greater than zero");
+        }
+        if (!Files.isDirectory(this.basePath)) {
+            return Collections.emptySet();
         }
         Set<PackageID> result = new LinkedHashSet<>();
         int baseNameCount = this.basePath.getNameCount();
@@ -140,7 +144,7 @@ public class GeneralFSPackageRepository implements PackageRepository {
         return result;
     }
     
-    private Path generatePath(PackageID pkgID) {
+    protected Path generatePath(PackageID pkgID) {
         Path pkgDirPath = this.basePath;
         for (Name comp : pkgID.getNameComps()) {
             pkgDirPath = pkgDirPath.resolve(comp.value);
@@ -155,9 +159,9 @@ public class GeneralFSPackageRepository implements PackageRepository {
      */
     public class FSPackageSource implements PackageSource {
 
-        private PackageID pkgID;
+        protected PackageID pkgID;
 
-        private Path pkgPath;
+        protected Path pkgPath;
 
         private List<String> cachedEntryNames;
 
@@ -270,7 +274,7 @@ public class GeneralFSPackageRepository implements PackageRepository {
      * 
      * @since 0.94
      */
-    private class FSPackageEntityNotAvailableException extends Exception {
+    public class FSPackageEntityNotAvailableException extends Exception {
 
         private static final long serialVersionUID = 1528033476455781589L;
         

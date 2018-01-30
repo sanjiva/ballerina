@@ -32,6 +32,7 @@ public enum DiagnosticCode {
     MISSING_PACKAGE_DECLARATION("missing.package.declaration"),
     UNEXPECTED_PACKAGE_DECLARATION("unexpected.package.declaration"),
     REDECLARED_SYMBOL("redeclared.symbol"),
+    REDECLARED_BUILTIN_SYMBOL("redeclared.builtin.symbol"),
     UNDEFINED_SYMBOL("undefined.symbol"),
     UNDEFINED_FUNCTION("undefined.function"),
     UNDEFINED_FUNCTION_IN_STRUCT("undefined.function.in.struct"),
@@ -54,7 +55,7 @@ public enum DiagnosticCode {
     WORKER_SEND_RECEIVE_PARAMETER_COUNT_MISMATCH("worker.send.receive.parameter.count.mismatch"),
     INVALID_WORKER_INTERACTION("worker.invalid.worker.interaction"),
 
-    FUNCTION_MUST_RETURN("function.must.return"),
+    INVOKABLE_MUST_RETURN("invokable.must.return"),
     ATLEAST_ONE_WORKER_MUST_RETURN("atleast.one.worker.must.return"),
     FORK_JOIN_WORKER_CANNOT_RETURN("fork.join.worker.cannot.return"),
     FORK_JOIN_INVALID_WORKER_COUNT("fork.join.invalid.worker.count"),
@@ -62,7 +63,6 @@ public enum DiagnosticCode {
     NEXT_CANNOT_BE_OUTSIDE_LOOP("next.cannot.be.outside.loop"),
     BREAK_CANNOT_BE_OUTSIDE_LOOP("break.cannot.be.outside.loop"),
     ABORT_CANNOT_BE_OUTSIDE_TRANSACTION_BLOCK("abort.cannot.be.outside.transaction.block"),
-    INVALID_RETRY_POSITION("invalid.retry.position"),
     BREAK_CANNOT_BE_USED_TO_EXIT_TRANSACTION("break.statement.cannot.be.used.to.exit.from.a.transaction"),
     NEXT_CANNOT_BE_USED_TO_EXIT_TRANSACTION("next.statement.cannot.be.used.to.exit.from.a.transaction"),
     INVALID_RETRY_COUNT("invalid.retry.count"),
@@ -75,6 +75,7 @@ public enum DiagnosticCode {
     TRANSFORMER_MUST_HAVE_OUTPUT("transformer.must.have.output"),
     TOO_MANY_OUTPUTS_FOR_TRANSFORMER("too.many.outputs.for.transformer"),
     TRANSFORMER_CONFLICTS_WITH_CONVERSION("transformer.conflicts.with.conversion"),
+    TRANSFORMER_UNSUPPORTED_TYPES("transformer.unsupported.types"),
 
     // Cast and conversion related codes
     INCOMPATIBLE_TYPES_CAST("incompatible.types.cast"),
@@ -106,6 +107,7 @@ public enum DiagnosticCode {
     NOT_ENOUGH_RETURN_VALUES("return.value.not.enough"),
     RETURN_VALUE_NOT_EXPECTED("return.value.not.expected"),
     INVALID_ACTION_INVOCATION("invalid.action.invocation"),
+    INVALID_FUNCTION_INVOCATION("invalid.function.invocation"),
 
     DUPLICATED_ERROR_CATCH("duplicated.error.catch"),
 
@@ -134,7 +136,11 @@ public enum DiagnosticCode {
     NO_SUCH_ATTRIBUTE("no.such.attribute"),
     ATTRIBUTE_VAL_CANNOT_REFER_NON_CONST("annotation.attribute.value.cannot.refer.non.constant"),
     INCOMPATIBLE_TYPES_ARRAY_FOUND("incompatible.types.array.found"),
-    
+
+    // Error codes related to iteration.
+    ITERABLE_NOT_SUPPORTED_COLLECTION("iterable.not.supported.collection"),
+    ITERABLE_TOO_MANY_VARIABLES("iterable.too.many.variables"),
+
     // Parser error diagnostic codes
     INVALID_TOKEN("invalid.token"),
     MISSING_TOKEN("missing.token"),

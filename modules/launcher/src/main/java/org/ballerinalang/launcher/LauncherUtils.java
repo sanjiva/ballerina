@@ -111,12 +111,14 @@ public class LauncherUtils {
     public static void runServices(ProgramFile programFile) {
         PrintStream outStream = System.out;
 
-        ServerConnectorRegistry.getInstance().initServerConnectors();
+        ServerConnectorRegistry serverConnectorRegistry = new ServerConnectorRegistry();
+        programFile.setServerConnectorRegistry(serverConnectorRegistry);
+        serverConnectorRegistry.initServerConnectors();
 
         outStream.println("ballerina: deploying service(s) in '" + programFile.getProgramFilePath() + "'");
         BLangProgramRunner.runService(programFile);
 
-        ServerConnectorRegistry.getInstance().deploymentComplete();
+        serverConnectorRegistry.deploymentComplete();
     }
 
     public static Path getSourceRootPath(String sourceRoot) {
@@ -239,7 +241,7 @@ public class LauncherUtils {
 
     /**
      * Get the executable program ({@link ProgramFile}) given the compiled program 
-     * ({@link org.wso2.ballerinalang.programfile.ProgramFile})
+     * ({@link org.wso2.ballerinalang.programfile.ProgramFile}).
      * 
      * @param programFile Compiled program
      * @return Executable program

@@ -20,10 +20,8 @@ package org.ballerinalang;
 import org.ballerinalang.bre.Context;
 import org.ballerinalang.bre.bvm.BLangVM;
 import org.ballerinalang.bre.bvm.BLangVMErrors;
-import org.ballerinalang.bre.bvm.ControlStackNew;
+import org.ballerinalang.bre.bvm.ControlStack;
 import org.ballerinalang.bre.bvm.StackFrame;
-import org.ballerinalang.bre.nonblocking.ModeResolver;
-import org.ballerinalang.connector.impl.ServerConnectorRegistry;
 import org.ballerinalang.model.types.BArrayType;
 import org.ballerinalang.model.types.BType;
 import org.ballerinalang.model.types.BTypes;
@@ -34,7 +32,8 @@ import org.ballerinalang.util.codegen.PackageInfo;
 import org.ballerinalang.util.codegen.ProgramFile;
 import org.ballerinalang.util.codegen.ServiceInfo;
 import org.ballerinalang.util.codegen.WorkerInfo;
-import org.ballerinalang.util.debugger.VMDebugManager;
+import org.ballerinalang.util.debugger.DebugContext;
+import org.ballerinalang.util.debugger.Debugger;
 import org.ballerinalang.util.exceptions.BLangRuntimeException;
 import org.ballerinalang.util.exceptions.BallerinaException;
 import org.ballerinalang.util.program.BLangFunctions;
@@ -60,6 +59,9 @@ public class BLangProgramRunner {
         // This is required to invoke package/service init functions;
         Context bContext = new Context(programFile);
 
+        Debugger debugger = new Debugger(programFile);
+        initDebugger(bContext, debugger);
+
         // Invoke package init function
         BLangFunctions.invokePackageInitFunction(programFile, servicesPackage.getInitFunctionInfo(), bContext);
 
@@ -75,19 +77,12 @@ public class BLangProgramRunner {
             }
 
             // Deploy service
-            ServerConnectorRegistry.getInstance().registerService(serviceInfo);
+            programFile.getServerConnectorRegistry().registerService(serviceInfo);
             serviceCount++;
         }
 
         if (serviceCount == 0) {
             throw new BallerinaException("no services found in '" + programFile.getProgramFilePath() + "'");
-        }
-
-        if (ModeResolver.getInstance().isDebugEnabled()) {
-            VMDebugManager debugManager = VMDebugManager.getInstance();
-            // This will start the websocket server.
-            debugManager.serviceInit();
-            debugManager.setDebugEnabled(true);
         }
     }
 
@@ -104,6 +99,9 @@ public class BLangProgramRunner {
 
         // Non blocking is not supported in the main program flow..
         Context bContext = new Context(programFile);
+
+        Debugger debugger = new Debugger(programFile);
+        initDebugger(bContext, debugger);
 
         // Invoke package init function
         FunctionInfo mainFuncInfo = getMainFunction(mainPkgInfo);
@@ -123,21 +121,17 @@ public class BLangProgramRunner {
         callerSF.getRefRegs()[0] = arrayArgs;
 
         StackFrame stackFrame = new StackFrame(mainFuncInfo, defaultWorkerInfo, -1, new int[0]);
-        stackFrame.getRefLocalVars()[0] = arrayArgs;
-        ControlStackNew controlStackNew = bContext.getControlStackNew();
-        controlStackNew.pushFrame(stackFrame);
+        stackFrame.getRefRegs()[0] = arrayArgs;
+        ControlStack controlStack = bContext.getControlStack();
+        controlStack.pushFrame(stackFrame);
         bContext.startTrackWorker();
         bContext.setStartIP(defaultWorkerInfo.getCodeAttributeInfo().getCodeAddrs());
-        if (ModeResolver.getInstance().isDebugEnabled()) {
-            VMDebugManager debugManager = VMDebugManager.getInstance();
-            // This will start the websocket server.
-            debugManager.mainInit(bContext);
-        }
+
         BLangVM bLangVM = new BLangVM(programFile);
         bLangVM.run(bContext);
         bContext.await();
-        if (bContext.isDebugEnabled()) {
-            bContext.getDebugInfoHolder().getDebugSessionObserver().notifyExit();
+        if (debugger.isDebugEnabled()) {
+            debugger.notifyExit();
         }
         if (bContext.getError() != null) {
             String stackTraceStr = BLangVMErrors.getPrintableStackTrace(bContext.getError());
@@ -145,7 +139,17 @@ public class BLangProgramRunner {
         }
     }
 
-    private static FunctionInfo getMainFunction(PackageInfo mainPkgInfo) {
+    private static void initDebugger(Context bContext, Debugger debugger) {
+        bContext.getProgramFile().setDebugger(debugger);
+        if (debugger.isDebugEnabled()) {
+            DebugContext debugContext = new DebugContext();
+            bContext.setDebugContext(debugContext);
+            debugger.init();
+            debugger.addDebugContextAndWait(debugContext);
+        }
+    }
+
+    public static FunctionInfo getMainFunction(PackageInfo mainPkgInfo) {
         String errorMsg = "main function not found in  '" +
                 mainPkgInfo.getProgramFile().getProgramFilePath() + "'";
 

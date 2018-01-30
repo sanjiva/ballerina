@@ -68,8 +68,9 @@ public function createCache (string name, int expiryTimeMillis, int capacity, fl
 }
 
 @Description {value:"Returns the size of the cache."}
+@Return {value:"int: The size of the cache"}
 public function <Cache cache> size () returns (int) {
-    return cache.entries.length();
+    return lengthof cache.entries;
 }
 
 @Description {value:"Adds the given key, value pair to the provided cache."}
@@ -77,7 +78,7 @@ public function <Cache cache> size () returns (int) {
 @Param {value:"value: value to be cached"}
 public function <Cache cache> put (string key, any value) {
     int cacheCapacity = cache.capacity;
-    int cacheSize = cache.entries.length();
+    int cacheSize = lengthof cache.entries;
     // if the current cache is full,
     if (cacheCapacity <= cacheSize) {
         cache.evictCache();
@@ -105,6 +106,7 @@ function <Cache cache> evictCache () {
 
 @Description {value:"Returns the cached value associated with the given key. Returns null if the provided key does not exist in the cache."}
 @Param {value:"key: key which is used to retrieve the cached value"}
+@Return { value:"The cached value associated with the given key" }
 public function <Cache cache> get (string key) returns (any) {
     any value = cache.entries[key];
     if (value == null) {
@@ -125,9 +127,10 @@ public function <Cache cache> remove (string key) {
 }
 
 @Description {value:"Removes expired cache entries from all caches."}
+@Return {value:"error: Any error which occured during cache expiration"}
 function runCacheExpiry () returns (error) {
     int currentCacheIndex = 0;
-    int cacheSize = cacheMap.length();
+    int cacheSize = lengthof cacheMap;
     // Iterate through all caches.
     while (currentCacheIndex < cacheSize) {
         string currentCacheKey = cacheMap.keys()[currentCacheIndex];

@@ -40,7 +40,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * @param <V> Value
  * @since 0.8.0
  */
-public class BMap<K, V extends BValue> extends BallerinaMessageDataSource implements BRefType {
+public class BMap<K, V extends BValue> extends BallerinaMessageDataSource implements BRefType, BCollection {
 
 
     @SuppressWarnings("unchecked")
@@ -52,11 +52,6 @@ public class BMap<K, V extends BValue> extends BallerinaMessageDataSource implem
     public BMap() {
         map =  new LinkedHashMap<>();
     }
-
-    /**
-     * Output stream to write message out to the socket.
-     */
-    private OutputStream outputStream;
 
     /**
      * Retrieve the value for the given key from map.
@@ -84,6 +79,23 @@ public class BMap<K, V extends BValue> extends BallerinaMessageDataSource implem
         } finally {
             writeLock.unlock();
         }
+    }
+
+    /**
+     * Clear map entries.
+     */
+    public void clear() {
+        map.clear();
+    }
+
+    /**
+     * Check existence of a key of a map.
+     *
+     * @param key key of the map item
+     * @return returns boolean true if key exists
+     */
+    public boolean hasKey(K key) {
+        return map.containsKey(key);
     }
 
     /**
@@ -157,7 +169,7 @@ public class BMap<K, V extends BValue> extends BallerinaMessageDataSource implem
 
     @Override
     public BValue copy() {
-        BMap newMap = BTypes.typeMap.getEmptyValue();
+        BMap<K, BValue> newMap = BTypes.typeMap.getEmptyValue();
         for (Map.Entry<K, V> entry: map.entrySet()) {
             BValue value = entry.getValue();
             newMap.put(entry.getKey(), value == null ? null : value.copy());
@@ -171,19 +183,47 @@ public class BMap<K, V extends BValue> extends BallerinaMessageDataSource implem
     }
 
     @Override
-    public void serializeData() {
+    public void serializeData(OutputStream outputStream) {
         try {
             outputStream.write(stringValue().getBytes(Charset.defaultCharset()));
-            outputStream.close();
         } catch (IOException e) {
             throw new BallerinaException("Error occurred while serializing data", e);
         }
     }
 
     @Override
-    public void setOutputStream(OutputStream outputStream) {
-        this.outputStream = outputStream;
+    public BIterator newIterator() {
+        return new BMapIterator<>(this);
     }
 
+    /**
+     * {@code {@link BMapIterator}} provides iterator implementation for map values.
+     *
+     * @since 0.96.0
+     */
+    static class BMapIterator<K, V extends BValue> implements BIterator {
+
+        BMap<K, V> collection;
+        Iterator<Map.Entry<K, V>> iterator;
+
+        BMapIterator(BMap<K, V> value) {
+            collection = value;
+            iterator = new LinkedHashMap<>(value.map).entrySet().iterator();
+        }
+
+        @Override
+        public BValue[] getNext(int arity) {
+            Map.Entry<K, V> next = iterator.next();
+            if (arity == 1) {
+                return new BValue[] {next.getValue()};
+            }
+            return new BValue[] {new BString((String) next.getKey()), next.getValue()};
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iterator.hasNext();
+        }
+    }
 }
 

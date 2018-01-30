@@ -26,8 +26,8 @@ import org.ballerinalang.net.http.Constants;
 import org.ballerinalang.util.exceptions.BallerinaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.wso2.carbon.transport.http.netty.contract.ClientConnectorException;
-import org.wso2.carbon.transport.http.netty.message.HTTPCarbonMessage;
+import org.wso2.transport.http.netty.contract.ClientConnectorException;
+import org.wso2.transport.http.netty.message.HTTPCarbonMessage;
 
 /**
  * {@code Post} is the POST action implementation of the HTTP Connector.
@@ -39,11 +39,11 @@ import org.wso2.carbon.transport.http.netty.message.HTTPCarbonMessage;
         args = {
                 @Argument(name = "c", type = TypeKind.CONNECTOR),
                 @Argument(name = "path", type = TypeKind.STRING),
-                @Argument(name = "req", type = TypeKind.STRUCT, structType = "Request",
+                @Argument(name = "req", type = TypeKind.STRUCT, structType = "OutRequest",
                         structPackage = "ballerina.net.http")
         },
         returnType = {
-                @ReturnType(type = TypeKind.STRUCT, structType = "Response", structPackage = "ballerina.net.http"),
+                @ReturnType(type = TypeKind.STRUCT, structType = "InResponse", structPackage = "ballerina.net.http"),
                 @ReturnType(type = TypeKind.STRUCT, structType = "HttpConnectorError",
                         structPackage = "ballerina.net.http"),
         },

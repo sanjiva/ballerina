@@ -1,316 +1,254 @@
 package ballerina.net.http;
 
-@Description { value:"Represents a http request message"}
-public struct Request {
+import ballerina.mime;
+
+@Description {value:"Represent 'Content-Legth' header name"}
+public const string CONTENT_LENGTH = "Content-Length";
+
+@Description { value:"Represents the HTTP server connector connection"}
+@Field {value:"remoteHost: The server host name"}
+@Field {value:"port: The server port"}
+public struct Connection {
+	string remoteHost;
+	int port;
 }
 
-@Description { value:"Gets the request URL from the message"}
-@Param { value:"req: The request message" }
-@Return { value:"string: The request URL value" }
-public native function <Request req> getRequestURL () (string);
+@Description { value:"Sends outbound response to the caller"}
+@Param { value:"conn: The server connector connection" }
+@Param { value:"res: The outbound response message" }
+@Return { value:"Error occured during HTTP server connector respond" }
+public native function <Connection conn> respond (OutResponse res) (HttpConnectorError);
 
-@Description { value:"Gets the Content-Length header from the message"}
-@Param { value:"req: A request message" }
-@Return { value:"int: length of the message" }
-public native function <Request req> getContentLength () (int);
+@Description { value:"Forwards inbound response to the caller"}
+@Param { value:"conn: The server connector connection" }
+@Param { value:"res: The inbound response message" }
+@Return { value:"Error occured during HTTP server connector forward" }
+public native function <Connection conn> forward (InResponse res) (HttpConnectorError);
 
-@Description { value:"Gets the HTTP method from the message"}
-@Param { value:"req: A request message" }
-@Return { value:"string: http method value" }
-public native function <Request req> getMethod () (string);
+@Description { value:"Gets the Session struct for a valid session cookie from the connection. Otherwise creates a new Session struct." }
+@Param { value:"conn: The server connector connection" }
+@Return { value:"HTTP Session struct" }
+public native function <Connection conn> createSessionIfAbsent () (Session);
 
-@Description { value:"Sets the Content-Length header on the message"}
-@Param { value:"req: A request message" }
-@Param { value:"contentLength: Length of the message" }
-public native function <Request req> setContentLength (int contentLength);
+@Description { value:"Gets the Session struct from the connection if it is present" }
+@Param { value:"conn: The server connector connection" }
+@Return { value:"The HTTP Session struct assoicated with the request" }
+public native function <Connection conn> getSession () (Session);
 
-@Description { value:"Gets formParam map from HTTP message"}
-@Param { value:"req: The request message" }
-@Return { value:"map: The map of form params" }
-public native function <Request req> getFormParams () (map);
-
-@Description { value:"Gets queryParam map from HTTP message"}
-@Param { value:"req: The request message" }
-@Return { value:"map: The map of query params" }
-public native function <Request req> getQueryParams () (map);
-
-@Description { value:"Gets the message payload in JSON format"}
-@Param { value:"req: A request message" }
-@Return { value:"json: The JSON reresentation of the message payload" }
-public native function <Request req> getJsonPayload () (json);
-
-@Description { value:"Gets the message payload in XML format"}
-@Param { value:"req: The request message" }
-@Return { value:"xml: The XML representation of the message payload" }
-public native function <Request req> getXmlPayload () (xml);
-
-@Description { value:"Gets the message payload in BLOB format"}
-@Param { value:"req: A request message" }
-@Return { value:"json: The BLOB reresentation of the message payload" }
-public native function <Request req> getBinaryPayload () (blob);
-
-@Description { value:"Sets a message property"}
-@Param { value:"req: A request message" }
-@Param { value:"propertyName: The name of the property" }
-@Param { value:"propertyValue: The value of the property" }
-public native function <Request req> setProperty (string propertyName, string propertyValue);
-
-@Description { value:"Sets the message payload using a string object"}
-@Param { value:"req: A request message" }
-@Param { value:"payload: The string payload object" }
-public native function <Request req> setStringPayload (string payload);
-
-@Description { value:"Gets a transport header from the message"}
-@Param { value:"req: A request message" }
-@Param { value:"headerName: The header name" }
-@Return { value:"string: The header value" }
-@Return { value:"boolean: Indicates whether the header exists" }
-public native function <Request req> getHeader (string headerName) (string, boolean);
-
-@Description { value:"Gets the message payload in string format"}
-@Param { value:"req: A request message" }
-@Return { value:"string: The string representation of the message payload" }
-public native function <Request req> getStringPayload () (string);
-
-@Description { value:"Adds a transport header to the message"}
-@Param { value:"m: The message object" }
-@Param { value:"key: The header name" }
-@Param { value:"value: The header value" }
-public native function <Request req> addHeader (string key, string value);
-
-@Description { value:"Gets transport headers from the message"}
-@Param { value:"req: A request message" }
-@Return { value:"string[]: The header values" }
-public native function <Request req> getHeaders () (string[]);
-
-@Description { value:"Sets the message payload using a JSON object"}
-@Param { value:"req: A request message" }
-@Param { value:"payload: The JSON payload object" }
-public native function <Request req> setJsonPayload (json payload);
-
-@Description { value:"Retrieve a message property"}
-@Param { value:"req: A request message" }
-@Param { value:"propertyName: The name of the property" }
-@Return { value:"string: The property value" }
-public native function <Request req> getProperty (string propertyName) (string);
-
-@Description { value:"Removes a transport header from the message"}
-@Param { value:"req: A request message" }
-@Param { value:"key: The header name" }
-public native function <Request req> removeHeader (string key);
-
-@Description { value:"Removes all transport headers from the message"}
-@Param { value:"m: The message object" }
-public native function <Request req> removeAllHeaders ();
-
-@Description { value:"Sets the message payload using an XML object"}
-@Param { value:"m: The current message object" }
-@Param { value:"payload: The XML payload object" }
-public native function <Request req> setXmlPayload (xml payload);
-
-@Description { value:"Clones and creates a new instance of a request message"}
-@Param { value:"req: A request message" }
-@Return { value:"request: The new instance of the request message" }
-public native function <Request req> clone () (Request);
-
-@Description { value:"Sets the value of a transport header"}
-@Param { value:"req: A request message" }
-@Param { value:"key: The header name" }
-@Param { value:"value: The header value" }
-public native function <Request req> setHeader (string key, string value);
-
-
-@Description { value:"Represents a http response message"}
-public struct Response {
+@Description { value:"Represents an HTTP inbound request message"}
+@Field {value:"path: Resource path of request URI"}
+@Field {value:"method: HTTP request method"}
+@Field {value:"httpVersion: The version of HTTP"}
+@Field {value:"userAgent: User-Agent request header"}
+public struct InRequest {
+	string path;
+	string method;
+	string httpVersion;
+	string userAgent;
+    string extraPathInfo;
 }
 
-@Description { value:"Gets the HTTP status code from the message"}
-@Param { value:"res: The response message" }
-@Return { value:"int: http status code" }
-public native function <Response res> getStatusCode () (int);
+@Description { value:"Get the entity from the inbound request with the body included"}
+@Param { value:"req: The inbound request message" }
+@Return { value:"Entity of the request" }
+public native function <InRequest req> getEntity () (mime:Entity);
 
-@Description { value:"Gets the Content-Length header from the message"}
-@Param { value:"res: The response message" }
-@Return { value:"int: length of the message" }
-public native function <Response res> getContentLength () (int);
+@Description { value:"Get the entity from the inbound request without the body. This function is to be used only internally"}
+@Param { value:"req: The inbound request message" }
+@Return { value:"Entity of the request" }
+native function <InRequest req> getEntityWithoutBody () (mime:Entity);
 
-@Description { value:"Sets the Content-Length header on the message"}
-@Param { value:"res: The response message" }
-@Param { value:"contentLength: Length of the message" }
-public native function <Response res> setContentLength (int contentLength);
+@Description { value:"Set the entity to inbound request"}
+@Param { value:"req: The inbound request message" }
+@Return { value:"Entity of the request" }
+public native function <InRequest req> setEntity (mime:Entity entity);
 
-@Description { value:"Sets the HTTP StatusCode on the message"}
-@Param { value:"res: The response message" }
-@Param { value:"statusCode: HTTP status code" }
-public native function <Response res> setStatusCode (int statusCode);
+@Description { value:"Gets the request URL from the request"}
+@Param { value:"req: The inbound request message" }
+@Return { value:"The request URL value" }
+public native function <InRequest req> getRequestURL () (string);
 
-@Description { value:"Sets a custom HTTP Reason phrase"}
-@Param { value:"res: The response message" }
-@Param { value:"reasonPhrase: Reason phrase value" }
-public native function <Response res> setReasonPhrase (string reasonPhrase);
+@Description { value:"Gets the HTTP method from the request"}
+@Param { value:"req: The inbound request message" }
+@Return { value:"The HTTP request method associated with the request" }
+public native function <InRequest req> getMethod () (string);
 
-@Description { value:"Gets the message payload in JSON format"}
-@Param { value:"res: The response message" }
-@Return { value:"json: The JSON reresentation of the message payload" }
-public native function <Response res> getJsonPayload () (json);
+@Description { value:"Gets the query parameters from the HTTP request as a map"}
+@Param { value:"req: The inbound request message" }
+@Return { value:"The map of query params" }
+public native function <InRequest req> getQueryParams () (map);
 
-@Description { value:"Gets the message payload in XML format"}
-@Param { value:"res: The response message" }
-@Return { value:"xml: The XML representation of the message payload" }
-public native function <Response res> getXmlPayload () (xml);
+@Description { value:"Retrieves the named property from the request"}
+@Param { value:"req: The inbound request message" }
+@Param { value:"propertyName: The name of the property" }
+@Return { value:"The property value" }
+public native function <InRequest req> getProperty (string propertyName) (string);
 
-@Description { value:"Gets the message payload in BLOB format"}
-@Param { value:"res: The response message" }
-@Return { value:"json: The BLOB reresentation of the message payload" }
-public native function <Response res> getBinaryPayload () (blob);
+@Description { value:"Represents an HTTP outbound request message"}
+public struct OutRequest {
+}
 
-@Description { value:"Sets a message property"}
-@Param { value:"res: The response message" }
+@Description { value:"Get the entity from the outbound request"}
+@Param { value:"req: The outbound request message" }
+@Return { value:"Entity of the request" }
+public native function <OutRequest req> getEntity () (mime:Entity);
+
+@Description { value:"Get the entity from the outbound request without the body. This function is to be used only internally"}
+@Param { value:"req: The outbound request message" }
+@Return { value:"Entity of the request" }
+native function <OutRequest req> getEntityWithoutBody () (mime:Entity);
+
+@Description { value:"Set the entity to outbound request"}
+@Param { value:"req: The outbound request message" }
+@Return { value:"Entity of the request" }
+public native function <OutRequest req> setEntity (mime:Entity entity);
+
+@Description { value:"Sets a request property"}
+@Param { value:"req: The outbound request message" }
 @Param { value:"propertyName: The name of the property" }
 @Param { value:"propertyValue: The value of the property" }
-public native function <Response res> setProperty (string propertyName, string propertyValue);
+public native function <OutRequest req> setProperty (string propertyName, string propertyValue);
 
-@Description { value:"Sets the message payload using a string object"}
-@Param { value:"res: The response message" }
-@Param { value:"payload: The string payload object" }
-public native function <Response res> setStringPayload (string payload);
-
-@Description { value:"Gets a transport header from the message"}
-@Param { value:"res: The response message" }
-@Param { value:"headerName: The header name" }
-@Return { value:"string: The header value" }
-@Return { value:"boolean: Indicates whether the header exists" }
-public native function <Response res> getHeader (string headerName) (string, boolean);
-
-@Description { value:"Gets the message payload in string format"}
-@Param { value:"res: The response message" }
-@Return { value:"string: The string representation of the message payload" }
-public native function <Response res> getStringPayload () (string);
-
-@Description { value:"Adds a transport header to the message"}
-@Param { value:"res: The response message" }
-@Param { value:"key: The header name" }
-@Param { value:"value: The header value" }
-public native function <Response res> addHeader (string key, string value);
-
-@Description { value:"Gets transport headers from the message"}
-@Param { value:"res: The response message" }
-@Return { value:"string[]: The header values" }
-public native function <Response res> getHeaders () (string[]);
-
-@Description { value:"Sets the message payload using a JSON object"}
-@Param { value:"req: The response message" }
-@Param { value:"payload: The JSON payload object" }
-public native function <Response res> setJsonPayload (json payload);
-
-@Description { value:"Retrieve a message property"}
-@Param { value:"res: The response message" }
+@Description { value:"Retrieves the named property from the request"}
+@Param { value:"req: The outbound request message" }
 @Param { value:"propertyName: The name of the property" }
-@Return { value:"string: The property value" }
-public native function <Response res> getProperty (string propertyName) (string);
+@Return { value:"The property value" }
+public native function <OutRequest req> getProperty (string propertyName) (string);
 
-@Description { value:"Removes a transport header from the message"}
-@Param { value:"res: The response message" }
-@Param { value:"key: The header name" }
-public native function <Response res> removeHeader (string key);
+@Description { value:"Represents an HTTP Inbound response message"}
+@Field {value:"statusCode: The response status code"}
+@Field {value:"reasonPhrase: The status code reason phrase"}
+@Field {value:"server: The server header"}
+public struct InResponse {
+    int statusCode;
+    string reasonPhrase;
+    string server;
+}
 
-@Description { value:"Removes all transport headers from the message"}
-@Param { value:"res: The response message" }
-public native function <Response res> removeAllHeaders ();
+@Description { value:"Get the entity from the inbound response with the body"}
+@Param { value:"res: The inbound response message" }
+@Return { value:"Entity of the response" }
+public native function <InResponse res> getEntity () (mime:Entity);
 
-@Description { value:"Sets the message payload using an XML object"}
-@Param { value:"res: The response message" }
-@Param { value:"payload: The XML payload object" }
-public native function <Response res> setXmlPayload (xml payload);
+@Description { value:"Get the entity from the inbound response without the body. This function is to be used only internally"}
+@Param { value:"req: The inbound response message" }
+@Return { value:"Entity of the response" }
+native function <InResponse res> getEntityWithoutBody () (mime:Entity);
 
-@Description { value:"Clones and creates a new instance of a response message"}
-@Param { value:"res: The response message" }
-@Return { value:"response: The new instance of the response message" }
-public native function <Response res> clone () (Response);
+@Description { value:"Set the entity to inbound response"}
+@Param { value:"res: The inbound response message" }
+@Return { value:"Entity of the response" }
+public native function <InResponse res> setEntity (mime:Entity entity);
 
-@Description { value:"Sets the value of a transport header"}
-@Param { value:"res: The response message" }
-@Param { value:"key: The header name" }
-@Param { value:"value: The header value" }
-public native function <Response res> setHeader (string key, string value);
+@Description { value:"Gets the HTTP status code from the response"}
+@Param { value:"res: The inbound response message" }
+@Return { value:"HTTP status code of the response" }
+public native function <InResponse res> getStatusCode () (int);
 
-@Description { value:"Sends outbound response to the caller."}
-@Param { value:"res: The response message" }
-public native function <Response res> send ();
+@Description { value:"Retrieve a response property"}
+@Param { value:"res: The inbound response message" }
+@Param { value:"propertyName: The name of the property" }
+@Return { value:"The property value" }
+public native function <InResponse res> getProperty (string propertyName) (string);
 
-@Description { value:"Forwards client service response directly to the caller."}
-@Param { value:"res: The response message" }
-@Param { value:"resp: The new instance of the response message" }
-public native function <Response res> forward (Response resp);
+@Description { value:"Represents an HTTP outbound response message"}
+@Field {value:"statusCode: The response status code"}
+@Field {value:"reasonPhrase: The status code reason phrase"}
+public struct OutResponse {
+    int statusCode;
+    string reasonPhrase;
+}
 
-@Description { value:"Represents a http Session"}
+@Description { value:"Get the entity from the outbound response"}
+@Param { value:"res: The outbound response message" }
+@Return { value:"Entity of the response" }
+public native function <OutResponse res> getEntity () (mime:Entity);
+
+@Description { value:"Get the entity from the outbound response without the body. This function is to be used only internally"}
+@Param { value:"req: The outbound response message" }
+@Return { value:"Entity of the response" }
+native function <OutResponse res> getEntityWithoutBody () (mime:Entity);
+
+@Description { value:"Set the entity to outbound response"}
+@Param { value:"res: The outbound response message" }
+@Return { value:"Entity of the response" }
+public native function <OutResponse res> setEntity (mime:Entity entity);
+
+@Description { value:"Sets a response property"}
+@Param { value:"res: The outbound response message" }
+@Param { value:"propertyName: The name of the property" }
+@Param { value:"propertyValue: The value of the property" }
+public native function <OutResponse res> setProperty (string propertyName, string propertyValue);
+
+@Description { value:"Retrieve a response property"}
+@Param { value:"res: The outbound response message" }
+@Param { value:"propertyName: The name of the property" }
+@Return { value:"The property value" }
+public native function <OutResponse res> getProperty (string propertyName) (string);
+
+@Description { value:"Represents an HTTP Session"}
 public struct Session {
 }
 
-@Description { value:"Gets the session struct for valid id, otherwise create new" }
-@Param { value:"req: The request message" }
-@Return { value:"Session: HTTP session struct" }
-public native function <Request req> createSessionIfAbsent () (Session);
-
-@Description { value:"Gets the session struct for valid id" }
-@Param { value:"req: The request message" }
-@Return { value:"Session: HTTP session struct" }
-public native function <Request req> getSession () (Session);
-
-@Description { value:"Gets the session attribute" }
-@Param { value:"session: A session struct" }
-@Param { value:"attributeKey: HTTPSession attribute key" }
-@Return { value:"any: HTTPSession attribute value" }
+@Description { value:"Gets the named session attribute" }
+@Param { value:"session: A Session struct" }
+@Param { value:"attributeKey: HTTP session attribute key" }
+@Return { value:"HTTP session attribute value" }
 public native function <Session session> getAttribute (string attributeKey) (any);
 
-@Description { value:"Sets session attributes to the message" }
-@Param { value:"session: A session struct" }
-@Param { value:"attributeKey: HTTPSession attribute key" }
-@Param { value:"attributeValue: HTTPSession attribute Value" }
+@Description { value:"Sets the specified key/value pair as a session attribute" }
+@Param { value:"session: A Session struct" }
+@Param { value:"attributeKey: Session attribute key" }
+@Param { value:"attributeValue: Session attribute Value" }
 public native function <Session session> setAttribute (string attributeKey, any attributeValue);
 
 @Description { value:"Gets the session attribute names" }
-@Param { value:"session: A session struct" }
-@Return { value:"string[]: HTTPSession attribute name array" }
+@Param { value:"session: A Session struct" }
+@Return { value:"Session attribute names array" }
 public native function <Session session> getAttributeNames () (string[]);
 
-@Description { value:"Gets the session attribute" }
+@Description { value:"Gets the session attribute key value pairs as a map" }
 @Param { value:"session: A session struct" }
+@Return { value:"The map of session attributes key value pairs" }
+public native function <Session session> getAttributes () (map);
+
+@Description { value:"Invalidates the session and it will no longer be accessible from the request" }
+@Param { value:"session: A Session struct" }
 public native function <Session session> invalidate ();
 
-@Description { value:"Remove the session attribute" }
-@Param { value:"session: A session struct" }
-@Param { value:"attributeKey: HTTPSession attribute key" }
+@Description { value:"Remove the named session attribute" }
+@Param { value:"session: A Session struct" }
+@Param { value:"attributeKey: Session attribute key" }
 public native function <Session session> removeAttribute (string attributeKey);
 
-@Description { value:"Gets the session id" }
-@Param { value:"session: A session struct" }
-@Return { value:"string: HTTPSession id" }
+@Description { value:"Gets the session cookie ID" }
+@Param { value:"session: A Session struct" }
+@Return { value:"Session ID" }
 public native function <Session session> getId () (string);
 
-@Description { value:"Gets the session status" }
-@Param { value:"session: A session struct" }
-@Return { value:"boolean: HTTPSession status" }
+@Description { value:"Checks whether the given session is a newly created session or an existing session" }
+@Param { value:"session: A Session struct" }
+@Return { value:"Indicates if the session is a newly created session or not" }
 public native function <Session session> isNew () (boolean);
 
 @Description { value:"Gets the session creation time" }
-@Param { value:"session: A session struct" }
-@Return { value:"int: HTTPSession creation time" }
+@Param { value:"session: A Session struct" }
+@Return { value:"Session creation time" }
 public native function <Session session> getCreationTime () (int);
 
-@Description { value:"Gets the session last accessed time" }
-@Param { value:"session: A session struct" }
-@Return { value:"int: HTTPSession last accessed time" }
+@Description { value:"Gets the last time the sessions was accessed" }
+@Param { value:"session: A Session struct" }
+@Return { value:"Last accessed time of the session" }
 public native function <Session session> getLastAccessedTime () (int);
 
-@Description { value:"Gets the session max inactive interval" }
-@Param { value:"session: A session struct" }
-@Return { value:"int: HTTPSession max inactive interval" }
+@Description { value:"Gets maximum inactive interval for the session. The session expires after this time period." }
+@Param { value:"session: A Session struct" }
+@Return { value:"Session max inactive interval" }
 public native function <Session session> getMaxInactiveInterval () (int);
 
-@Description { value:"Sets session max inactive interval" }
-@Param { value:"session: A session struct" }
-@Param { value:"timeInterval: HTTPSession max inactive interval" }
+@Description { value:"Sets the maximum inactive interval for the session. The session expires after this time period." }
+@Param { value:"session: A Session struct" }
+@Param { value:"timeInterval: Session max inactive interval" }
 public native function <Session session> setMaxInactiveInterval (int timeInterval);
 
 @Description { value:"HttpConnectorError struct represents an error occured during the HTTP client invocation" }
@@ -328,7 +266,7 @@ public struct HttpConnectorError {
 @Description { value:"Retry struct represents retry related options for HTTP client invocation" }
 @Field {value:"count: Number of retries"}
 @Field {value:"interval: Retry interval in millisecond"}
-struct Retry {
+public struct Retry {
     int count;
     int interval;
 }
@@ -338,10 +276,10 @@ struct Retry {
 @Field {value:"trustStorePassword: Trust store password"}
 @Field {value:"keyStoreFile: File path to key store file"}
 @Field {value:"keyStorePassword: Key store password"}
-@Field {value:"sslEnabledProtocols: ssl/tls protocols to be enabled"}
-@Field {value:"ciphers: List of ciphers to be used"}
-@Field {value:"sslProtocol: ssl Protocol to be used"}
-struct SSL {
+@Field {value:"sslEnabledProtocols: SSL/TLS protocols to be enabled. eg: TLSv1,TLSv1.1,TLSv1.2"}
+@Field {value:"ciphers: List of ciphers to be used. eg: TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA"}
+@Field {value:"sslProtocol: SSL Protocol to be used. eg: TLS1.2"}
+public struct SSL {
     string trustStoreFile;
     string trustStorePassword;
     string keyStoreFile;
@@ -351,89 +289,118 @@ struct SSL {
     string sslProtocol;
 }
 
-@Description { value:"FollowRedirects struct represents http redirect related options to be used for HTTP client invocation" }
+@Description { value:"FollowRedirects struct represents HTTP redirect related options to be used for HTTP client invocation" }
 @Field {value:"enabled: Enable redirect"}
 @Field {value:"maxCount: Maximun number of redirects to follow"}
-struct FollowRedirects {
+public struct FollowRedirects {
     boolean enabled = false;
     int maxCount = 5;
 }
 
+@Description { value:"Proxy struct represents proxy server configurations to be used for HTTP client invocation" }
+@Field {value:"proxyHost: host name of the proxy server"}
+@Field {value:"proxyPort: proxy server port"}
+@Field {value:"proxyUserName: Proxy server user name"}
+@Field {value:"proxyPassword: proxy server password"}
+public struct Proxy {
+    string host;
+    int port;
+    string userName;
+    string password;
+}
+
 @Description { value:"Options struct represents options to be used for HTTP client invocation" }
-@Field {value:"port: Port number of the remort service"}
-@Field {value:"endpointTimeout: Endpoint timeout value in millisecond"}
-@Field {value:"chunkDisabled: Disable chunking"}
+@Field {value:"port: Port number of the remote service"}
+@Field {value:"endpointTimeout: Endpoint timeout value in millisecond (default value: 60000 milliseconds)"}
+@Field {value:"maxActiveConnections: The maximum number of active connections the connector can create (default value: -1, indicates that the number of connections is not restricted)"}
+@Field {value:"keepAlive: Keep the connection or close it (default value: true)"}
+@Field {value:"transferEncoding: The types of encoding applied to the request (default value: chunking)"}
+@Field {value:"chunking: The chunking behaviour of the request"}
+@Field {value:"httpVersion: The version of HTTP outbound request"}
 @Field {value:"followRedirects: Redirect related options"}
-@Field {value:"ssl: ssl/tls related options"}
+@Field {value:"ssl: SSL/TLS related options"}
 @Field {value:"retryConfig: Retry related options"}
+@Field {value:"proxy: Proxy server related options"}
 public struct Options {
     int port;
     int endpointTimeout = 60000;
-    boolean chunkDisabled = false;
+    int maxActiveConnections = -1;
+    boolean keepAlive = true;
+    string transferEncoding = "chunking";
+    string chunking = "auto";
+    string httpVersion;
     FollowRedirects followRedirects;
     SSL ssl;
     Retry retryConfig;
+    Proxy proxy;
 }
 
-@Description { value:"Http client connector for outbound http requests"}
-@Param { value:"serviceUri: Url of the service" }
+@Description { value:"HTTP client connector for outbound HTTP requests"}
+@Param { value:"serviceUri: URI of the service" }
 @Param { value:"connectorOptions: connector options" }
 public connector HttpClient (string serviceUri, Options connectorOptions) {
 
 	@Description { value:"The POST action implementation of the HTTP Connector."}
 	@Param { value:"path: Resource path " }
-	@Param { value:"req: A request message" }
-	@Return { value:"response: The response message" }
-	@Return { value:"httpConnectorError: Error occured during HTTP client invocation" }
-	native action post (string path, Request req) (Response, HttpConnectorError);
+	@Param { value:"req: An HTTP outbound request message" }
+	@Return { value:"The inbound response message" }
+	@Return { value:"Error occured during HTTP client invocation" }
+	native action post (string path, OutRequest req) (InResponse, HttpConnectorError);
 
 	@Description { value:"The HEAD action implementation of the HTTP Connector."}
 	@Param { value:"path: Resource path " }
-	@Param { value:"req: A request message" }
-	@Return { value:"response: The response message" }
-	@Return { value:"httpConnectorError: Error occured during HTTP client invocation" }
-	native action head (string path, Request req) (Response, HttpConnectorError);
+	@Param { value:"req: An HTTP outbound request message" }
+	@Return { value:"The inbound response message" }
+	@Return { value:"Error occured during HTTP client invocation" }
+	native action head (string path, OutRequest req) (InResponse, HttpConnectorError);
 
 	@Description { value:"The PUT action implementation of the HTTP Connector."}
 	@Param { value:"path: Resource path " }
-	@Param { value:"req: A request message" }
-	@Return { value:"response: The response message" }
-	@Return { value:"httpConnectorError: Error occured during HTTP client invocation" }
-	native action put (string path, Request req) (Response, HttpConnectorError);
+	@Param { value:"req: An HTTP outbound request message" }
+	@Return { value:"The inbound response message" }
+	@Return { value:"Error occured during HTTP client invocation" }
+	native action put (string path, OutRequest req) (InResponse, HttpConnectorError);
 
 	@Description { value:"Invokes an HTTP call with the specified HTTP verb."}
 	@Param { value:"httpVerb: HTTP verb value" }
 	@Param { value:"path: Resource path " }
-	@Param { value:"req: A request message" }
-	@Return { value:"response: The response message" }
-	@Return { value:"httpConnectorError: Error occured during HTTP client invocation" }
-	native action execute (string httpVerb, string path, Request req) (Response, HttpConnectorError);
+	@Param { value:"req: An HTTP outbound request message" }
+	@Return { value:"The inbound response message" }
+	@Return { value:"Error occured during HTTP client invocation" }
+	native action execute (string httpVerb, string path, OutRequest req) (InResponse, HttpConnectorError);
 
 	@Description { value:"The PATCH action implementation of the HTTP Connector."}
 	@Param { value:"path: Resource path " }
-	@Param { value:"req: A request message" }
-	@Return { value:"response: The response message" }
-	@Return { value:"httpConnectorError: Error occured during HTTP client invocation" }
-	native action patch (string path, Request req) (Response, HttpConnectorError);
+	@Param { value:"req: An HTTP outbound request message" }
+	@Return { value:"The inbound response message" }
+	@Return { value:"Error occured during HTTP client invocation" }
+	native action patch (string path, OutRequest req) (InResponse, HttpConnectorError);
 
 	@Description { value:"The DELETE action implementation of the HTTP connector"}
 	@Param { value:"path: Resource path " }
-	@Param { value:"req: A request message" }
-	@Return { value:"response: The response message" }
-	@Return { value:"httpConnectorError: Error occured during HTTP client invocation" }
-	native action delete (string path, Request req) (Response, HttpConnectorError);
+	@Param { value:"req: An HTTP outbound request message" }
+	@Return { value:"The inbound response message" }
+	@Return { value:"Error occured during HTTP client invocation" }
+	native action delete (string path, OutRequest req) (InResponse, HttpConnectorError);
 
 	@Description { value:"GET action implementation of the HTTP Connector"}
 	@Param { value:"path: Request path" }
-	@Param { value:"req: A request message" }
-	@Return { value:"response: The response message" }
-	@Return { value:"httpConnectorError: Error occured during HTTP client invocation" }
-	native action get (string path, Request req) (Response, HttpConnectorError);
+	@Param { value:"req: An HTTP outbound request message" }
+	@Return { value:"The inbound response message" }
+	@Return { value:"Error occured during HTTP client invocation" }
+	native action get (string path, OutRequest req) (InResponse, HttpConnectorError);
 
-	@Description { value:"forward action can be used to invoke an http call with incoming request httpVerb"}
+	@Description { value:"OPTIONS action implementation of the HTTP Connector"}
 	@Param { value:"path: Request path" }
-	@Param { value:"req: A request message" }
-	@Return { value:"response: The response message" }
-	@Return { value:"httpConnectorError: Error occured during HTTP client invocation" }
-	native action forward (string path, Request req) (Response, HttpConnectorError);
+	@Param { value:"req: An HTTP outbound request message" }
+	@Return { value:"The inbound response message" }
+	@Return { value:"Error occured during HTTP client invocation" }
+	native action options (string path, OutRequest req) (InResponse, HttpConnectorError);
+
+	@Description { value:"Forward action can be used to invoke an HTTP call with inbound request's HTTP verb"}
+	@Param { value:"path: Request path" }
+	@Param { value:"req: An HTTP inbound request message" }
+	@Return { value:"The inbound response message" }
+	@Return { value:"Error occured during HTTP client invocation" }
+	native action forward (string path, InRequest req) (InResponse, HttpConnectorError);
 }

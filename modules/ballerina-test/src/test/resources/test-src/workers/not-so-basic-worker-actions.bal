@@ -1,3 +1,5 @@
+import ballerina.net.http;
+
 function forkJoinWithTimeoutTest1() (map) {
     map m = {};
     fork {
@@ -407,3 +409,76 @@ function largeForkJoinCreationTest() (int) {
     return result;
 }
 
+function forkJoinWithStruct () (string result) {
+    fork {
+        worker w1 {
+            foo f = {x:1, y:"w1"};
+            println(f);
+            f -> fork;
+        }
+        worker w2 {
+            float f = 10.344;
+            println("[w2] f: " + f);
+            f -> fork;
+        }
+    } join (all) (map results) {
+        var resW1, _ = (any[])results["w1"];
+        var f, _ = (foo)resW1[0];
+        result = "[join-block] sW1: " + f.y;
+        var resW2, _ = (any[])results["w2"];
+        var fW2, _ = (float)resW2[0];
+        result = result + "[join-block] fW2: " + fW2;
+    }
+    return result;
+}
+
+struct foo {
+    int x;
+    string y;
+}
+
+function forkJoinWithSameWorkerContent () (string result) {
+    fork {
+        worker w1 {
+            any[] a = [];
+            a -> fork;
+        }
+        worker w2 {
+            any[] b = [];
+            b -> fork;
+        }
+
+    } join (all) (map results) {
+        println(results);
+    }
+    fork {
+        worker w1 {
+            string[] a = ["data1"];
+            a -> fork;
+        }
+        worker w2 {
+            string[] a = ["data2"];
+            a -> fork;
+        }
+    } join (all) (map results) {
+        var resW1, _ = (any[])results["w1"];
+        var s1, _ = (string[])resW1[0];
+        result = "W1: " + s1[0];
+        var resW2, _ = (any[])results["w2"];
+        var s2, _ = (string[])resW2[0];
+        result = result + ", W2: " + s2[0];
+    }
+    return result;
+}
+
+function testWorkerStackCreation ()(int) {
+    endpoint<http:HttpClient> c {
+        create http:HttpClient("http://example.com", {port:80,keepAlive:true, httpVersion : "HTTP1.1", ssl : {}});
+    }
+    worker w1 {
+        return 1;
+    }
+    worker w2 {
+        println("testWorkerStackCreation done.");
+    }
+}

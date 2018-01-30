@@ -39,19 +39,19 @@ function testXMLPILiteral() (xml, xml, xml, xml, xml) {
 }
 
 function testExpressionAsElementName() (xml, xml) {
-    string v1 = "11";
-    string v2 = "foo>bar";
+    string v1 = "foo";
+    string v2 = "bar";
     xml x1 = xml `<{{v1}}>hello</{{v1}}>`;
-    xml x2 = xml `<{{v2}}>hello</{{v2}}>`;
+    xml x2 = xml `<{{v2 + 3}}>hello</{{v2 + 3}}>`;
 
     return x1, x2;
 }
 
 function testExpressionAsAttributeName() (xml, xml) {
-    string v1 = "bar";
-    string v2 = "foo>bar";
+    string v1 = "foo";
+    string v2 = "bar";
     xml x1 = xml `<foo {{v1}}="attribute value">hello</foo>`;
-    xml x2 = xml `<foo {{v2}}="attribute value">hello</foo>`;
+    xml x2 = xml `<foo {{v2 + 5}}="attribute value">hello</foo>`;
 
     return x1, x2;
 }
@@ -114,5 +114,32 @@ function f1() (string) {
 function testFunctionCallInXMLTemplate() (xml) {
     xml x1 = xml `<foo>{{ "<-->" + f1()}}</foo>`;
     
+    return x1;
+}
+
+function testNullXMLinXMLLiteral() (xml) {
+  xml x1;
+  xml root = xml `<root>{{x1}}</root>`;
+  return root;
+}
+
+function testInvalidElementName_1() (xml) {
+    string v1 = "11";
+    xml x1 = xml `<{{v1}}>hello</{{v1}}>`;
+
+    return x1;
+}
+
+function testInvalidElementName_2() (xml) {
+    string v1 = "foo>bar";
+    xml x1 = xml `<{{v1}}>hello</{{v1}}>`;
+
+    return x1;
+}
+
+function testIvalidAttributeName() (xml) {
+    string v1 = "foo>bar";
+    xml x1 = xml `<foo {{v1}}="attribute value">hello</foo>`;
+
     return x1;
 }

@@ -26,6 +26,9 @@ import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
+/**
+ * Class to test functionality of lengthof operator.
+ */
 public class LengthOfOperatorTest {
 
     CompileResult result;
@@ -232,4 +235,59 @@ public class LengthOfOperatorTest {
         BRunUtil.invoke(resNegative, "arrayLengthAccessTestJSONArrayNegativeNullCase", args);
     }
 
+    @Test(description = "Test lengthof unary expression when reference point to null map.",
+            expectedExceptions = {BLangRuntimeException.class},
+            expectedExceptionsMessageRegExp = "error: NullReferenceException.*")
+    public void testArrayLengthAccessTestMapNegativeNullCase() {
+        BValue[] args = {new BInteger(100), new BInteger(5)};
+        BRunUtil.invoke(resNegative, "arrayLengthAccessNullMapCase", args);
+    }
+
+    @Test(description = "Test lengthof map")
+    public void lengthOfMap() {
+        BValue[] args = {new BInteger(100), new BInteger(5)};
+        BValue[] returns = BRunUtil.invoke(result, "lengthOfMap", args);
+
+        Assert.assertEquals(returns.length, 1);
+        Assert.assertSame(returns[0].getClass(), BInteger.class);
+
+        int actual = (int) ((BInteger) returns[0]).intValue();
+        int expected = 4;
+        Assert.assertEquals(actual, expected);
+    }
+
+    @Test(description = "Test lengthof map empty")
+    public void lengthOfMapEmpty() {
+        BValue[] args = {new BInteger(100), new BInteger(5)};
+        BValue[] returns = BRunUtil.invoke(result, "lengthOfMapEmpty", args);
+
+        Assert.assertEquals(returns.length, 1);
+        Assert.assertSame(returns[0].getClass(), BInteger.class);
+
+        int actual = (int) ((BInteger) returns[0]).intValue();
+        int expected = 0;
+        Assert.assertEquals(actual, expected);
+    }
+
+    @Test(description = "Test lengthof string")
+    public void lengthOfString() {
+        BValue[] returns = BRunUtil.invoke(result, "lengthOfString");
+        Assert.assertEquals(((BInteger) returns[0]).intValue(), 11);
+        Assert.assertEquals(((BInteger) returns[1]).intValue(), 4);
+        Assert.assertEquals(((BInteger) returns[2]).intValue(), 10);
+    }
+
+    @Test(description = "Test lengthof blob")
+    public void lengthOfBlob() {
+        BValue[] returns = BRunUtil.invoke(result, "lengthOfBlob");
+        Assert.assertEquals(((BInteger) returns[0]).intValue(), 5);
+        Assert.assertEquals(((BInteger) returns[1]).intValue(), 0);
+    }
+
+    @Test(description = "Test lengthof string", 
+            expectedExceptions = { BLangRuntimeException.class },
+            expectedExceptionsMessageRegExp = "error: NullReferenceException.*")
+    public void lengthOfNullString() {
+        BRunUtil.invoke(result, "lengthOfNullString");
+    }
 }

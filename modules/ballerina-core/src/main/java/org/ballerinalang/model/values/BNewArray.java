@@ -29,7 +29,7 @@ import java.lang.reflect.Array;
  * @since 0.87
  */
 // TODO Change this class name
-public abstract class BNewArray implements BRefType {
+public abstract class BNewArray implements BRefType, BCollection {
 
     /**
      * The maximum size of arrays to allocate.
@@ -114,5 +114,42 @@ public abstract class BNewArray implements BRefType {
 
     public long size() {
         return size;
+    }
+
+    public abstract BValue getBValue(long index);
+
+    @Override
+    public BIterator newIterator() {
+        return new BArrayIterator(this);
+    }
+
+    /**
+     * {@code {@link BArrayIterator}} provides iterator implementation for Ballerina array values.
+     *
+     * @since 0.96.0
+     */
+    static class BArrayIterator implements BIterator {
+        BNewArray array;
+        long cursor = 0;
+        long length;
+
+        BArrayIterator(BNewArray value) {
+            this.array = value;
+            this.length = value.size();
+        }
+
+        @Override
+        public BValue[] getNext(int arity) {
+            long cursor = this.cursor++;
+            if (arity == 1) {
+                return new BValue[] {array.getBValue(cursor)};
+            }
+            return new BValue[] {new BInteger(cursor), array.getBValue(cursor)};
+        }
+
+        @Override
+        public boolean hasNext() {
+            return cursor < length;
+        }
     }
 }

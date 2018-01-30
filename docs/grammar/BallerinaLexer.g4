@@ -21,7 +21,6 @@ ANNOTATION  : 'annotation' ;
 ENUM        : 'enum' ;
 PARAMETER   : 'parameter' ;
 CONST       : 'const' ;
-TYPEMAPPER  : 'typemapper' ;
 TRANSFORMER : 'transformer' ;
 WORKER      : 'worker' ;
 ENDPOINT    : 'endpoint' ;
@@ -46,7 +45,7 @@ CREATE      : 'create' ;
 ATTACH      : 'attach' ;
 IF          : 'if' ;
 ELSE        : 'else' ;
-ITERATE     : 'iterate' ;
+FOREACH     : 'foreach' ;
 WHILE       : 'while' ;
 NEXT        : 'next' ;
 BREAK       : 'break' ;
@@ -63,14 +62,13 @@ RETURN      : 'return' ;
 REPLY       : 'reply' ;
 TRANSACTION : 'transaction' ;
 ABORT       : 'abort' ;
-ABORTED     : 'aborted' ;
-COMMITTED   : 'committed' ;
 FAILED      : 'failed' ;
-RETRY       : 'retry' ;
+RETRIES     : 'retries' ;
 LENGTHOF    : 'lengthof' ;
 TYPEOF      : 'typeof' ;
 WITH        : 'with' ;
 BIND        : 'bind' ;
+IN          : 'in' ;
 
 // Separators
 
@@ -114,6 +112,7 @@ RARROW      : '->' ;
 LARROW      : '<-' ;
 AT          : '@' ;
 BACKTICK    : '`' ;
+RANGE       : '..' ;
 
 // §3.10.1 Integer Literals
 IntegerLiteral
@@ -253,7 +252,7 @@ FloatingPointLiteral
 
 fragment
 DecimalFloatingPointLiteral
-    :   Digits '.' Digits? ExponentPart? FloatTypeSuffix?
+    :   Digits '.' (Digits ExponentPart? FloatTypeSuffix? | Digits? ExponentPart FloatTypeSuffix? | Digits? ExponentPart? FloatTypeSuffix)
     |   '.' Digits ExponentPart? FloatTypeSuffix?
     |   Digits ExponentPart FloatTypeSuffix?
     |   Digits FloatTypeSuffix
@@ -404,7 +403,7 @@ NEW_LINE  :  [\r\n\u000C]+ -> channel(HIDDEN)
     ;
 
 LINE_COMMENT
-    :   '//' ~[\r\n]*
+    :   '//' ~[\r\n]*   -> channel(HIDDEN)
     ;
 
 fragment

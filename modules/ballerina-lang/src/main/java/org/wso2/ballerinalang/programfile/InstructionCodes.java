@@ -44,12 +44,12 @@ public interface InstructionCodes {
     int BCONST_1 = 18;
     int RCONST_NULL = 19;
 
-    int ILOAD = 21;
-    int FLOAD = 22;
-    int SLOAD = 23;
-    int BLOAD = 24;
-    int LLOAD = 25;
-    int RLOAD = 26;
+    int IMOVE = 21;
+    int FMOVE = 22;
+    int SMOVE = 23;
+    int BMOVE = 24;
+    int LMOVE = 25;
+    int RMOVE = 26;
     int IALOAD = 27;
     int FALOAD = 28;
     int SALOAD = 29;
@@ -157,12 +157,14 @@ public interface InstructionCodes {
     int CALL = 120;
     int NCALL = 121;
     int ACALL = 122;
-    int NACALL = 123;
-    int THROW = 124;
-    int ERRSTORE = 125;
-    int FPCALL = 126;
-    int FPLOAD = 127;
-    int TCALL = 128;
+    int THROW = 123;
+    int ERRSTORE = 124;
+    int FPCALL = 125;
+    int FPLOAD = 126;
+    int TCALL = 127;
+
+    int SEQ_NULL = 128;
+    int SNE_NULL = 129;
 
     // Type Conversion related instructions
     int I2F = 130;
@@ -220,14 +222,14 @@ public interface InstructionCodes {
 
     int ANY2TYPE = 182;
     int S2JSONX = 183;
-
+    int NULL2S = 184;
 
     // Transactions
     int TR_BEGIN = 188;
     int TR_END = 189;
 
-    int WRKINVOKE = 190;
-    int WRKREPLY = 191;
+    int WRKSEND = 190;
+    int WRKRECEIVE = 191;
     int FORKJOIN = 192;
     int WRKSTART = 193;
     int WRKRETURN = 194;
@@ -248,7 +250,11 @@ public interface InstructionCodes {
     int NEWJSON = 213;
     int NEWDATATABLE = 215;
 
-    int REP = 230;
+    int NEW_INT_RANGE = 219;
+    int ITR_NEW = 220;
+    int ITR_HAS_NEXT = 221;
+    int ITR_NEXT = 222;
+
     int IRET = 231;
     int FRET = 232;
     int SRET = 233;

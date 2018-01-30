@@ -26,7 +26,7 @@ import org.ballerinalang.natives.annotations.Argument;
 import org.ballerinalang.natives.annotations.BallerinaFunction;
 
 /**
- * Native function ballerina.log:printDebug
+ * Native function ballerina.log:printDebug.
  *
  * @since 0.89
  */
@@ -39,7 +39,7 @@ import org.ballerinalang.natives.annotations.BallerinaFunction;
 public class LogDebug extends AbstractLogFunction {
 
     public BValue[] execute(Context ctx) {
-        String pkg = ctx.getControlStackNew().currentFrame.prevStackFrame
+        String pkg = ctx.getControlStack().currentFrame.prevStackFrame
                                                     .getCallableUnitInfo().getPackageInfo().getPkgPath();
 
         if (LOG_MANAGER.getPackageLogLevel(pkg).value() <= BLogLevel.DEBUG.value()) {

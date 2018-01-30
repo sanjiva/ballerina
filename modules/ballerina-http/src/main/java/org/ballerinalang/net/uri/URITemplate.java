@@ -18,42 +18,46 @@
 
 package org.ballerinalang.net.uri;
 
-import org.ballerinalang.net.http.HttpResource;
+import org.ballerinalang.net.uri.parser.DataElement;
+import org.ballerinalang.net.uri.parser.DataElementFactory;
 import org.ballerinalang.net.uri.parser.Node;
 import org.ballerinalang.net.uri.parser.URITemplateParser;
-import org.wso2.carbon.transport.http.netty.message.HTTPCarbonMessage;
 
+import java.io.UnsupportedEncodingException;
 import java.util.Map;
 
 /**
  * Basic URI Template implementation.
  *
+ * @param <DataType> Data type stored in the data element.
+ * @param <InboundMsgType> Inbound message type for additional checks.
  **/
+public class URITemplate<DataType, InboundMsgType> {
 
-public class URITemplate {
+    private Node<DataElement<DataType, InboundMsgType>> syntaxTree;
 
-    private Node syntaxTree;
-
-    public URITemplate(Node syntaxTree) {
+    public URITemplate(Node<DataElement<DataType, InboundMsgType>> syntaxTree) {
         this.syntaxTree = syntaxTree;
     }
 
-    public String expand(Map<String, String> variables) {
-        return null;
+    public DataType matches(String uri, Map<String, String> variables, InboundMsgType inboundMsg) {
+        DataElement<DataType, InboundMsgType> dataElement = syntaxTree.matchAll(uri, variables, 0);
+        if (dataElement == null) {
+            return null;
+        }
+        return dataElement.getData(inboundMsg);
     }
 
-    public HttpResource matches(String uri, Map<String, String> variables, HTTPCarbonMessage carbonMessage) {
-        return syntaxTree.matchAll(uri, variables, carbonMessage, 0);
-    }
-
-    public void parse(String uriTemplate, HttpResource resource) throws URITemplateException {
+    public void parse(String uriTemplate, DataType resource,
+                      DataElementFactory<? extends DataElement<DataType, InboundMsgType>>
+                              elementCreator) throws URITemplateException, UnsupportedEncodingException {
         uriTemplate = removeTheFirstAndLastBackSlash(uriTemplate);
 
-        URITemplateParser parser = new URITemplateParser(syntaxTree);
+        URITemplateParser<DataType, InboundMsgType> parser = new URITemplateParser<>(syntaxTree, elementCreator);
         parser.parse(uriTemplate, resource);
     }
 
-    public String removeTheFirstAndLastBackSlash(String template) throws URITemplateException {
+    private String removeTheFirstAndLastBackSlash(String template) throws URITemplateException {
         String uri = template;
         if ("/".equals(uri)) {
             return uri;

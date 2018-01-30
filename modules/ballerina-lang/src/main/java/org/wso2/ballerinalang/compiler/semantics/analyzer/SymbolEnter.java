@@ -197,6 +197,9 @@ public class SymbolEnter extends BLangNodeVisitor {
         // Define connector nodes.
         pkgNode.connectors.forEach(con -> defineNode(con, pkgEnv));
 
+        // Define connector params and type.
+        defineConnectorParams(pkgNode.connectors, pkgEnv);
+
         // Define transformer nodes.
         pkgNode.transformers.forEach(tansformer -> defineNode(tansformer, pkgEnv));
 
@@ -205,9 +208,6 @@ public class SymbolEnter extends BLangNodeVisitor {
 
         // Define struct field nodes.
         defineStructFields(pkgNode.structs, pkgEnv);
-
-        // Define connector params and type.
-        defineConnectorParams(pkgNode.connectors, pkgEnv);
 
         // Define connector action nodes.
         defineConnectorMembers(pkgNode.connectors, pkgEnv);
@@ -277,7 +277,7 @@ public class SymbolEnter extends BLangNodeVisitor {
                 .map(identifier -> names.fromIdNode(identifier))
                 .collect(Collectors.toList());
         PackageID pkgID = new PackageID(nameComps, names.fromIdNode(importPkgNode.version));
-        if (symTable.builtInPackageSymbol.name.equals(pkgID.name)) {
+        if (pkgID.name.getValue().startsWith(Names.BUILTIN_PACKAGE.value)) {
             dlog.error(importPkgNode.pos, DiagnosticCode.PACKAGE_NOT_FOUND,
                     importPkgNode.getQualifiedPackageName());
             return;
@@ -302,8 +302,13 @@ public class SymbolEnter extends BLangNodeVisitor {
     public void visit(BLangXMLNS xmlnsNode) {
         String nsURI = (String) ((BLangLiteral) xmlnsNode.namespaceURI).value;
 
-        if (!xmlnsNode.prefix.value.isEmpty() && nsURI.isEmpty()) {
+        if (xmlnsNode.prefix.value != null && nsURI.isEmpty()) {
             dlog.error(xmlnsNode.pos, DiagnosticCode.INVALID_NAMESPACE_DECLARATION, xmlnsNode.prefix);
+        }
+
+        // set the prefix of the default namespace
+        if (xmlnsNode.prefix.value == null) {
+            xmlnsNode.prefix.value = XMLConstants.DEFAULT_NS_PREFIX;
         }
 
         BXMLNSSymbol xmlnsSymbol = Symbols.createXMLNSSymbol(names.fromIdNode(xmlnsNode.prefix), nsURI,
@@ -354,7 +359,6 @@ public class SymbolEnter extends BLangNodeVisitor {
             BLangEnumerator enumerator = enumNode.enumerators.get(i);
             BVarSymbol enumeratorSymbol = new BVarSymbol(Flags.PUBLIC,
                     names.fromIdNode(enumerator.name), enumSymbol.pkgID, enumType, enumSymbol);
-            enumeratorSymbol.varIndex = i;
             enumerator.symbol = enumeratorSymbol;
 
             if (symResolver.checkForUniqueSymbol(enumerator.pos, enumEnv, enumeratorSymbol, enumeratorSymbol.tag)) {
@@ -751,9 +755,10 @@ public class SymbolEnter extends BLangNodeVisitor {
 
         // Add it to the enclosing scope
         // Find duplicates
-        if (symResolver.checkForUniqueSymbol(pos, env, varSymbol, SymTag.VARIABLE_NAME)) {
-            enclScope.define(varSymbol.name, varSymbol);
+        if (!symResolver.checkForUniqueSymbol(pos, env, varSymbol, SymTag.VARIABLE_NAME)) {
+            varSymbol.type = symTable.errType;
         }
+        enclScope.define(varSymbol.name, varSymbol);
         return varSymbol;
     }
 

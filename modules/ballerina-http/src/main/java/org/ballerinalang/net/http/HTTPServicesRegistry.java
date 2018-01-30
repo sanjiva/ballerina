@@ -22,15 +22,26 @@ package org.ballerinalang.net.http;
 import org.ballerinalang.connector.api.AnnAttrValue;
 import org.ballerinalang.connector.api.Annotation;
 import org.ballerinalang.connector.api.BallerinaConnectorException;
+import org.ballerinalang.connector.api.ParamDetail;
+import org.ballerinalang.connector.api.Resource;
+import org.ballerinalang.net.uri.DispatcherUtil;
+import org.ballerinalang.net.uri.URITemplateException;
 import org.ballerinalang.net.ws.WebSocketServicesRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.wso2.carbon.transport.http.netty.config.ListenerConfiguration;
+import org.wso2.transport.http.netty.config.ListenerConfiguration;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
 
 /**
  * This services registry holds all the services of HTTP + WebSocket.
@@ -44,13 +55,11 @@ public class HTTPServicesRegistry {
 
     // Outer Map key=interface, Inner Map key=basePath
     private final Map<String, Map<String, HttpService>> servicesInfoMap = new ConcurrentHashMap<>();
-    private static final HTTPServicesRegistry servicesRegistry = new HTTPServicesRegistry();
+    private CopyOnWriteArrayList<String> sortedServiceURIs = new CopyOnWriteArrayList<>();
+    private final WebSocketServicesRegistry webSocketServicesRegistry;
 
-    private HTTPServicesRegistry() {
-    }
-
-    public static HTTPServicesRegistry getInstance() {
-        return servicesRegistry;
+    public HTTPServicesRegistry(WebSocketServicesRegistry webSocketServicesRegistry) {
+        this.webSocketServicesRegistry = webSocketServicesRegistry;
     }
 
     /**
@@ -80,15 +89,16 @@ public class HTTPServicesRegistry {
      * @param service requested serviceInfo to be registered.
      */
     public void registerService(HttpService service) {
-        Annotation annotation = service.getBalService()
-                .getAnnotation(Constants.HTTP_PACKAGE_PATH, Constants.ANN_NAME_CONFIG);
+        Annotation annotation = HttpUtil.getServiceConfigAnnotation(service.getBalService(),
+                                                                    Constants.HTTP_PACKAGE_PATH);
 
         String basePath = discoverBasePathFrom(service, annotation);
+        basePath = urlDecode(basePath);
         service.setBasePath(basePath);
         Set<ListenerConfiguration> listenerConfigurationSet = HttpUtil.getDefaultOrDynamicListenerConfig(annotation);
 
         for (ListenerConfiguration listenerConfiguration : listenerConfigurationSet) {
-            String entryListenerInterface = listenerConfiguration.getHost() + ":" + listenerConfiguration.getPort();
+            String entryListenerInterface = listenerConfiguration.getId();
             Map<String, HttpService> servicesOnInterface = servicesInfoMap
                     .computeIfAbsent(entryListenerInterface, k -> new HashMap<>());
 
@@ -111,33 +121,7 @@ public class HTTPServicesRegistry {
             }
         }
         logger.info("Service deployed : " + service.getName() + " with context " + basePath);
-    }
-
-    /**
-     * Removing service from the service registry.
-     *
-     * @param service requested service to be removed.
-     */
-    public void unregisterService(HttpService service) {
-        Annotation annotation = service.getBalService()
-                .getAnnotation(Constants.HTTP_PACKAGE_PATH, Constants.ANN_NAME_CONFIG);
-
-        String basePath = discoverBasePathFrom(service, annotation);
-        service.setBasePath(basePath);
-        Set<ListenerConfiguration> listenerConfigurationSet = HttpUtil.getDefaultOrDynamicListenerConfig(annotation);
-
-        for (ListenerConfiguration listenerConfiguration : listenerConfigurationSet) {
-            String entryListenerInterface = listenerConfiguration.getHost() + ":" + listenerConfiguration.getPort();
-            Map<String, HttpService> servicesOnInterface = servicesInfoMap.get(entryListenerInterface);
-            if (servicesOnInterface == null) {
-                continue;
-            }
-            servicesOnInterface.remove(basePath);
-            if (servicesOnInterface.isEmpty()) {
-                servicesInfoMap.remove(entryListenerInterface);
-                HttpConnectionManager.getInstance().closeIfLast(entryListenerInterface);
-            }
-        }
+        postProcessService(service);
     }
 
     private String discoverBasePathFrom(HttpService service, Annotation annotation) {
@@ -147,8 +131,10 @@ public class HTTPServicesRegistry {
             return Constants.DEFAULT_BASE_PATH.concat(basePath);
         }
         AnnAttrValue annotationValue = annotation.getAnnAttrValue(Constants.ANN_CONFIG_ATTR_BASE_PATH);
-        if (annotationValue != null && annotationValue.getStringValue() != null
-                && !annotationValue.getStringValue().trim().isEmpty()) {
+        if (annotationValue == null || annotationValue.getStringValue() == null) {
+            return Constants.DEFAULT_BASE_PATH.concat(basePath);
+        }
+        if (!annotationValue.getStringValue().trim().isEmpty()) {
             basePath = annotationValue.getStringValue();
         } else {
             basePath = Constants.DEFAULT_BASE_PATH;
@@ -161,7 +147,7 @@ public class HTTPServicesRegistry {
         if (!basePath.startsWith(Constants.DEFAULT_BASE_PATH)) {
             basePath = Constants.DEFAULT_BASE_PATH.concat(basePath);
         }
-        if (basePath.endsWith(Constants.DEFAULT_BASE_PATH)) {
+        if (basePath.endsWith(Constants.DEFAULT_BASE_PATH) && basePath.length() != 1) {
             basePath = basePath.substring(0, basePath.length() - 1);
         }
         return basePath;
@@ -173,6 +159,134 @@ public class HTTPServicesRegistry {
         String serviceName =
                 webSocketAnn.getAnnAttrValue(Constants.ANN_WEBSOCKET_ATTR_SERVICE_NAME).getStringValue().trim();
         String uri = basePath.concat(upgradePath);
-        WebSocketServicesRegistry.getInstance().registerServiceByName(serviceInterface, uri, serviceName);
+        webSocketServicesRegistry.addUpgradableServiceByName(serviceInterface, uri, serviceName);
+    }
+
+    private void postProcessService(HttpService httpService) {
+        CorsPopulator.populateServiceCors(httpService);
+        List<HttpResource> resources = new ArrayList<>();
+        for (Resource resource : httpService.getBalerinaService().getResources()) {
+            HttpResource httpResource = buildHttpResource(resource);
+            validateResourceSignature(httpResource);
+            try {
+                httpService.getUriTemplate().parse(httpResource.getPath(), httpResource,
+                                                   new HttpResourceElementFactory());
+            } catch (URITemplateException | UnsupportedEncodingException e) {
+                throw new BallerinaConnectorException(e.getMessage());
+            }
+            CorsPopulator.processResourceCors(httpResource, httpService);
+            resources.add(httpResource);
+        }
+        httpService.setResources(resources);
+        httpService.setAllAllowMethods(DispatcherUtil.getAllResourceMethods(httpService));
+        //basePath will get cached after registering service
+        sortedServiceURIs.add(httpService.getBasePath());
+        sortedServiceURIs.sort((basePath1, basePath2) -> basePath2.length() - basePath1.length());
+    }
+
+    private String urlDecode(String basePath) {
+        try {
+            basePath = URLDecoder.decode(basePath, StandardCharsets.UTF_8.name());
+        } catch (UnsupportedEncodingException e) {
+            throw new BallerinaConnectorException(e.getMessage());
+        }
+        return basePath;
+    }
+
+    private HttpResource buildHttpResource(Resource resource) {
+        HttpResource httpResource = new HttpResource(resource);
+        Annotation resourceConfigAnnotation = HttpUtil.getResourceConfigAnnotation(resource,
+                                                                                   Constants.HTTP_PACKAGE_PATH);
+        if (resourceConfigAnnotation == null) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("resourceConfig not specified in the Resource, using default sub path");
+            }
+            httpResource.setPath(resource.getName());
+            return httpResource;
+        }
+        String subPath;
+        AnnAttrValue pathAttrVal = resourceConfigAnnotation.getAnnAttrValue(Constants.ANN_RESOURCE_ATTR_PATH);
+        if (pathAttrVal == null) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Path not specified in the Resource, using default sub path");
+            }
+            subPath = resource.getName();
+        } else {
+            subPath = pathAttrVal.getStringValue().trim();
+        }
+        if (subPath.isEmpty()) {
+            subPath = Constants.DEFAULT_BASE_PATH;
+        }
+        httpResource.setPath(subPath);
+
+        AnnAttrValue methodsAttrVal = resourceConfigAnnotation.getAnnAttrValue(Constants.ANN_RESOURCE_ATTR_METHODS);
+        if (methodsAttrVal != null) {
+            httpResource.setMethods(DispatcherUtil.getValueList(methodsAttrVal, null));
+        }
+        AnnAttrValue consumesAttrVal = resourceConfigAnnotation.getAnnAttrValue(Constants.ANN_RESOURCE_ATTR_CONSUMES);
+        if (consumesAttrVal != null) {
+            httpResource.setConsumes(DispatcherUtil.getValueList(consumesAttrVal, null));
+        }
+        AnnAttrValue producesAttrVal = resourceConfigAnnotation.getAnnAttrValue(Constants.ANN_RESOURCE_ATTR_PRODUCES);
+        if (producesAttrVal != null) {
+            httpResource.setProduces(DispatcherUtil.getValueList(producesAttrVal, null));
+        }
+        if (httpResource.getProduces() != null) {
+            List<String> subAttributeValues = httpResource.getProduces().stream()
+                    .map(mediaType -> mediaType.trim()
+                            .substring(0, mediaType.indexOf("/")))
+                    .distinct().collect(Collectors.toList());
+            httpResource.setProducesSubTypes(subAttributeValues);
+        }
+        return httpResource;
+    }
+
+    private void validateResourceSignature(HttpResource resource) {
+        List<ParamDetail> paramDetails = resource.getParamDetails();
+
+        if (paramDetails.size() < 2) {
+            throw new BallerinaConnectorException("resource signature parameter count should be more than two");
+        }
+
+        if (!isValidResourceParam(paramDetails.get(0), Constants.CONNECTION)) {
+            throw new BallerinaConnectorException("first parameter should be of type - "
+                    + Constants.PROTOCOL_PACKAGE_HTTP + ":" + Constants.CONNECTION);
+        }
+
+        if (!isValidResourceParam(paramDetails.get(1), Constants.IN_REQUEST)) {
+            throw new BallerinaConnectorException("second parameter should be of type - "
+                    + Constants.PROTOCOL_PACKAGE_HTTP + ":" + Constants.IN_REQUEST);
+        }
+
+        for (int i = 2; i < paramDetails.size(); i++) {
+            ParamDetail paramDetail = paramDetails.get(i);
+            if (!paramDetail.getVarType().getName().equals(Constants.TYPE_STRING)) {
+                throw new BallerinaConnectorException("incompatible resource signature parameter type");
+            }
+        }
+    }
+
+    private boolean isValidResourceParam(ParamDetail paramDetail, String varTypeName) {
+        return paramDetail.getVarType().getPackagePath() != null
+                && paramDetail.getVarType().getPackagePath().equals(Constants.PROTOCOL_PACKAGE_HTTP)
+                && paramDetail.getVarType().getName().equals(varTypeName);
+    }
+
+    public String findTheMostSpecificBasePath(String requestURIPath, Map<String, HttpService> services) {
+        for (Object key : sortedServiceURIs) {
+            if (!requestURIPath.toLowerCase().contains(key.toString().toLowerCase())) {
+                continue;
+            }
+            if (requestURIPath.length() <= key.toString().length()) {
+                return key.toString();
+            }
+            if (requestURIPath.charAt(key.toString().length()) == '/') {
+                return key.toString();
+            }
+        }
+        if (services.containsKey(Constants.DEFAULT_BASE_PATH)) {
+            return Constants.DEFAULT_BASE_PATH;
+        }
+        return null;
     }
 }

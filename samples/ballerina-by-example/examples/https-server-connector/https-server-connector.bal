@@ -4,9 +4,9 @@ import ballerina.net.http;
 @http:configuration {
     basePath:"/hello",
     httpsPort:9095,
-    keyStoreFile:"${ballerina.home}/bre/security/wso2carbon.jks",
-    keyStorePassword:"wso2carbon",
-    certPassword:"wso2carbon"
+    keyStoreFile:"${ballerina.home}/bre/security/ballerinaKeystore.p12",
+    keyStorePassword:"ballerina",
+    certPassword:"ballerina"
 }
 
 service<http> helloWorld {
@@ -15,8 +15,9 @@ service<http> helloWorld {
         path:"/"
     }
 
-    resource sayHello (http:Request req, http:Response res) {
+    resource sayHello (http:Connection conn, http:InRequest req) {
+        http:OutResponse res = {};
         res.setStringPayload("Successful");
-        res.send();
+        _ = conn.respond(res);
     }
 }

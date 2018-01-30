@@ -5,7 +5,6 @@ options {
     tokenVocab = BallerinaLexer;
 }
 
-//todo comment statment
 //todo revisit blockStatement
 
 // starting point for parsing a bal file
@@ -38,7 +37,6 @@ definition
     |   connectorDefinition
     |   structDefinition
     |   enumDefinition
-    |   typeMapperDefinition
     |   constantDefinition
     |   annotationDefinition
     |   globalVariableDefinition
@@ -123,7 +121,6 @@ attachmentPoint
      | CONNECTOR                            # connectorAttachPoint
      | ACTION                               # actionAttachPoint
      | FUNCTION                             # functionAttachPoint
-     | TYPEMAPPER                           # typemapperAttachPoint
      | STRUCT                               # structAttachPoint
      | ENUM                                 # enumAttachPoint
      | CONST                                # constAttachPoint
@@ -134,19 +131,6 @@ attachmentPoint
 
 annotationBody
     :  LEFT_BRACE fieldDefinition* RIGHT_BRACE
-    ;
-
-typeMapperDefinition
-    :   NATIVE typeMapperSignature SEMICOLON
-    |   typeMapperSignature typeMapperBody
-    ;
-
-typeMapperSignature
-    :   TYPEMAPPER Identifier LEFT_PARENTHESIS parameter RIGHT_PARENTHESIS LEFT_PARENTHESIS typeName RIGHT_PARENTHESIS
-    ;
-
-typeMapperBody
-    :   LEFT_BRACE statement* RIGHT_BRACE
     ;
 
 constantDefinition
@@ -174,7 +158,7 @@ builtInTypeName
      |   TYPE_TYPE
      |   valueTypeName
      |   builtInReferenceTypeName
-     |   builtInTypeName (LEFT_BRACKET RIGHT_BRACKET)+
+     |   typeName (LEFT_BRACKET RIGHT_BRACKET)+
      ;
 
 referenceTypeName
@@ -250,7 +234,7 @@ statement
     |   assignmentStatement
     |   bindStatement
     |   ifElseStatement
-    |   iterateStatement
+    |   foreachStatement
     |   whileStatement
     |   nextStatement
     |   breakStatement
@@ -259,11 +243,9 @@ statement
     |   throwStatement
     |   returnStatement
     |   workerInteractionStatement
-    |   commentStatement
     |   expressionStmt
     |   transactionStatement
     |   abortStatement
-    |   retryStatement
     |   namespaceDeclarationStatement
     ;
 
@@ -271,12 +253,17 @@ variableDefinitionStatement
     :   typeName Identifier (ASSIGN expression)? SEMICOLON
     ;
 
-mapStructLiteral
-    :   LEFT_BRACE (mapStructKeyValue (COMMA mapStructKeyValue)*)? RIGHT_BRACE
+recordLiteral
+    :   LEFT_BRACE (recordKeyValue (COMMA recordKeyValue)*)? RIGHT_BRACE
     ;
 
-mapStructKeyValue
-    :   expression COLON expression
+recordKeyValue
+    :   recordKey COLON expression
+    ;
+
+recordKey
+    :   Identifier
+    |   simpleLiteral
     ;
 
 arrayLiteral
@@ -323,9 +310,13 @@ elseClause
     :   ELSE LEFT_BRACE statement*RIGHT_BRACE
     ;
 
-//todo replace with 'foreach'
-iterateStatement
-    :   ITERATE LEFT_PARENTHESIS typeName Identifier COLON expression RIGHT_PARENTHESIS LEFT_BRACE statement* RIGHT_BRACE
+foreachStatement
+    :   FOREACH LEFT_PARENTHESIS? variableReferenceList IN  (expression | intRangeExpression) RIGHT_PARENTHESIS? LEFT_BRACE statement* RIGHT_BRACE
+    ;
+
+intRangeExpression
+    : expression RANGE expression
+    | (LEFT_BRACKET|LEFT_PARENTHESIS) expression RANGE expression (RIGHT_BRACKET|RIGHT_PARENTHESIS)
     ;
 
 whileStatement
@@ -401,10 +392,6 @@ workerReply
     :   expressionList LARROW Identifier SEMICOLON
     ;
 
-commentStatement
-    :   LINE_COMMENT
-    ;
-
 variableReference
     :   nameReference                                                           # simpleVariableReference
     |   functionInvocation                                                      # functionInvocationReference
@@ -443,31 +430,30 @@ expressionStmt
     ;
 
 transactionStatement
-    :   TRANSACTION LEFT_BRACE statement* RIGHT_BRACE transactionHandlers
+    :   transactionClause failedClause?
     ;
 
-transactionHandlers
-    : failedClause? abortedClause? committedClause?
-    | failedClause? committedClause? abortedClause?
+transactionClause
+    : TRANSACTION (WITH transactionPropertyInitStatementList)? LEFT_BRACE statement* RIGHT_BRACE
+    ;
+
+transactionPropertyInitStatement
+    : retriesStatement
+    ;
+
+transactionPropertyInitStatementList
+    : transactionPropertyInitStatement (COMMA transactionPropertyInitStatement)*
     ;
 
 failedClause
     :   FAILED LEFT_BRACE statement* RIGHT_BRACE
     ;
-abortedClause
-    :   ABORTED LEFT_BRACE statement* RIGHT_BRACE
-    ;
-
-committedClause
-    :   COMMITTED LEFT_BRACE statement* RIGHT_BRACE
-    ;
-
 abortStatement
     :   ABORT SEMICOLON
     ;
 
-retryStatement
-    :   RETRY expression SEMICOLON
+retriesStatement
+    :   RETRIES LEFT_PARENTHESIS expression RIGHT_PARENTHESIS
     ;
 
 namespaceDeclarationStatement
@@ -481,7 +467,7 @@ namespaceDeclaration
 expression
     :   simpleLiteral                                                       # simpleLiteralExpression
     |   arrayLiteral                                                        # arrayLiteralExpression
-    |   mapStructLiteral                                                    # mapStructLiteralExpression
+    |   recordLiteral                                                       # recordLiteralExpression
     |   xmlLiteral                                                          # xmlLiteralExpression
     |   stringTemplateLiteral                                               # stringTemplateLiteralExpression
     |   valueTypeName DOT Identifier                                        # valueTypeTypeExpression
@@ -491,7 +477,6 @@ expression
     |   connectorInit                                                       # connectorInitExpression
     |   LEFT_PARENTHESIS typeName RIGHT_PARENTHESIS expression              # typeCastingExpression
     |   LT typeName (COMMA functionInvocation)? GT expression               # typeConversionExpression
-    |   expression QUESTION_MARK expression COLON expression                # ternaryExpression
     |   TYPEOF builtInTypeName                                              # typeAccessExpression
     |   (ADD | SUB | NOT | LENGTHOF | TYPEOF) expression                    # unaryExpression
     |   LEFT_PARENTHESIS expression RIGHT_PARENTHESIS                       # bracedExpression
@@ -502,6 +487,7 @@ expression
     |   expression (EQUAL | NOT_EQUAL) expression                           # binaryEqualExpression
     |   expression AND expression                                           # binaryAndExpression
     |   expression OR expression                                            # binaryOrExpression
+    |   expression QUESTION_MARK expression COLON expression                # ternaryExpression
     ;
 
 //reusable productions

@@ -21,14 +21,16 @@ import org.apache.axiom.om.OMNode;
 import org.apache.axiom.om.OMText;
 import org.ballerinalang.model.types.BTypes;
 import org.ballerinalang.model.util.XMLNodeType;
+import org.ballerinalang.util.BLangConstants;
 import org.ballerinalang.util.exceptions.BallerinaException;
 
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-
 import javax.xml.namespace.QName;
+
+import static org.ballerinalang.util.BLangConstants.STRING_NULL_VALUE;
 
 /**
  * {@code BXMLSequence} represents a sequence of {@link BXMLItem}s in Ballerina.
@@ -38,7 +40,7 @@ import javax.xml.namespace.QName;
 public final class BXMLSequence extends BXML<BRefValueArray> {
 
     private BRefValueArray sequence;
-    
+
     /**
      * Create an empty xml sequence.
      */
@@ -124,7 +126,7 @@ public final class BXMLSequence extends BXML<BRefValueArray> {
             return ((BXMLItem) sequence.get(0)).getAttribute(localName, namespace);
         }
         
-        return ZERO_STRING_VALUE;
+        return STRING_NULL_VALUE;
     }
     
     /**
@@ -136,7 +138,7 @@ public final class BXMLSequence extends BXML<BRefValueArray> {
             return ((BXMLItem) sequence.get(0)).getAttribute(localName, namespace, prefix);
         }
         
-        return ZERO_STRING_VALUE;
+        return STRING_NULL_VALUE;
     }
     
     /**
@@ -350,19 +352,9 @@ public final class BXMLSequence extends BXML<BRefValueArray> {
      * {@inheritDoc}
      */
     @Override
-    public void setOutputStream(OutputStream outputStream) {
+    public void serializeData(OutputStream outputStream) {
         for (int i = 0; i < sequence.size(); i++) {
-            ((BXML<?>) sequence.get(i)).setOutputStream(outputStream);
-        }
-    }
-    
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public void serializeData() {
-        for (int i = 0; i < sequence.size(); i++) {
-            ((BXML<?>) sequence.get(i)).serializeData();
+            ((BXML<?>) sequence.get(i)).serializeData(outputStream);
         }
     }
 
@@ -388,7 +380,7 @@ public final class BXMLSequence extends BXML<BRefValueArray> {
         } catch (Throwable t) {
             handleXmlException("failed to get xml as string: ", t);
         }
-        return "";
+        return BLangConstants.STRING_NULL_VALUE;
     }
     
     /**
@@ -418,6 +410,16 @@ public final class BXMLSequence extends BXML<BRefValueArray> {
         return this.sequence.size;
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void build() {
+        for (int i = 0; i < sequence.size(); i++) {
+            ((BXML<?>) sequence.get(i)).build();
+        }
+    }
+
     @Override
     public void removeAttribute(String qname) {
         if (sequence.size() != 1) {
@@ -425,5 +427,39 @@ public final class BXMLSequence extends BXML<BRefValueArray> {
         }
         
         ((BXMLItem) sequence.get(0)).removeAttribute(qname);
+    }
+
+    @Override
+    public BIterator newIterator() {
+        return new BXMLSequenceIterator(this);
+    }
+
+    /**
+     * {@code {@link BXMLSequenceIterator }} provides iterator for xml items..
+     *
+     * @since 0.96.0
+     */
+    static class BXMLSequenceIterator implements BIterator {
+
+        BXMLSequence value;
+        int cursor = 0;
+
+        BXMLSequenceIterator(BXMLSequence bxmlSequence) {
+            value = bxmlSequence;
+        }
+
+        @Override
+        public BValue[] getNext(int arity) {
+            if (arity == 1) {
+                return new BValue[] {value.sequence.get(cursor++)};
+            }
+            int cursor = this.cursor++;
+            return new BValue[] {new BInteger(cursor), value.sequence.get(cursor)};
+        }
+
+        @Override
+        public boolean hasNext() {
+            return cursor < value.sequence.size();
+        }
     }
 }

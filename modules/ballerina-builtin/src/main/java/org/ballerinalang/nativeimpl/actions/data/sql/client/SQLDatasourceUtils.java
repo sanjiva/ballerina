@@ -144,7 +144,7 @@ public class SQLDatasourceUtils {
                 if (value == null) {
                     stmt.setNull(index + 1, sqlType);
                 } else {
-                    stmt.setString(index + 1, value.stringValue());
+                    stmt.setNString(index + 1, value.stringValue());
                 }
                 ((CallableStatement) stmt).registerOutParameter(index + 1, sqlType);
             } else if (Constants.QueryParamDirection.OUT == direction) {
@@ -294,42 +294,6 @@ public class SQLDatasourceUtils {
             }
         } catch (SQLException e) {
             throw new BallerinaException("error in set tinyint value to statement: " + e.getMessage(), e);
-        }
-    }
-
-    public static void setSmallIntValue(PreparedStatement stmt, BValue value, int index, int direction, int sqlType) {
-        Short val = null;
-        if (value != null) {
-            String strValue = value.stringValue();
-            if (!strValue.isEmpty()) {
-                try {
-                    val = Short.parseShort(strValue);
-                } catch (NumberFormatException e) {
-                    throw new BallerinaException("invalid value for short: " + strValue);
-                }
-            }
-        }
-        try {
-            if (Constants.QueryParamDirection.IN == direction) {
-                if (val == null) {
-                    stmt.setNull(index + 1, sqlType);
-                } else {
-                    stmt.setShort(index + 1, val);
-                }
-            } else if (Constants.QueryParamDirection.INOUT == direction) {
-                if (val == null) {
-                    stmt.setNull(index + 1, sqlType);
-                } else {
-                    stmt.setShort(index + 1, val);
-                }
-                ((CallableStatement) stmt).registerOutParameter(index + 1, sqlType);
-            } else if (Constants.QueryParamDirection.OUT == direction) {
-                ((CallableStatement) stmt).registerOutParameter(index + 1, sqlType);
-            } else {
-                throw new BallerinaException("Invalid direction for the parameter, index: " + index);
-            }
-        } catch (SQLException e) {
-            throw new BallerinaException("error in set smallint value to statement." + e.getMessage(), e);
         }
     }
 
@@ -732,10 +696,10 @@ public class SQLDatasourceUtils {
 
     public static void setUserDefinedValue(Connection conn, PreparedStatement stmt, BValue value, int index,
             int direction, int sqlType) {
-        Object[] structData = getStructData(value);
-        Object[] dataArray = (Object[]) structData[0];
-        String structuredSQLType = (String) structData[1];
         try {
+            Object[] structData = getStructData(value, conn);
+            Object[] dataArray = (Object[]) structData[0];
+            String structuredSQLType = (String) structData[1];
             if (Constants.QueryParamDirection.IN == direction) {
                 if (dataArray == null) {
                     stmt.setNull(index + 1, sqlType);
@@ -750,8 +714,7 @@ public class SQLDatasourceUtils {
                     Struct struct = conn.createStruct(structuredSQLType, dataArray);
                     stmt.setObject(index + 1, struct);
                 }
-                ((CallableStatement) stmt)
-                        .registerOutParameter(index + 1, sqlType, structuredSQLType);
+                ((CallableStatement) stmt).registerOutParameter(index + 1, sqlType, structuredSQLType);
             } else if (Constants.QueryParamDirection.OUT == direction) {
                 ((CallableStatement) stmt).registerOutParameter(index + 1, sqlType, structuredSQLType);
             } else {
@@ -762,7 +725,7 @@ public class SQLDatasourceUtils {
         }
     }
 
-    private static Object[] getStructData(BValue value) {
+    private static Object[] getStructData(BValue value, Connection conn) throws SQLException {
         if (value == null || value.getType().getTag() != TypeTags.STRUCT_TAG) {
             return new Object[] { null, null };
         }
@@ -775,6 +738,7 @@ public class SQLDatasourceUtils {
         int stringFieldIndex = 0;
         int booleanFieldIndex = 0;
         int blobFieldIndex = 0;
+        int refFieldIndex = 0;
         for (int i = 0; i < fieldCount; ++i) {
             BStructType.StructField field = structFields[i];
             int typeTag = field.getFieldType().getTag();
@@ -798,6 +762,17 @@ public class SQLDatasourceUtils {
             case TypeTags.BLOB_TAG:
                 structData[i] = ((BStruct) value).getBlobField(blobFieldIndex);
                 ++blobFieldIndex;
+                break;
+            case TypeTags.STRUCT_TAG:
+                Object structValue = ((BStruct) value).getRefField(refFieldIndex);
+                if (structValue instanceof BStruct) {
+                    Object[] internalStructData = getStructData((BStruct) structValue, conn);
+                    Object[] dataArray = (Object[]) internalStructData[0];
+                    String internalStructType = (String) internalStructData[1];
+                    structValue = conn.createStruct(internalStructType, dataArray);
+                }
+                structData[i] = structValue;
+                ++refFieldIndex;
                 break;
             default:
                 throw new BallerinaException("unsupported data type for struct parameter: " + structuredSQLType);
@@ -873,6 +848,8 @@ public class SQLDatasourceUtils {
         case Types.VARBINARY:
         case Types.LONGVARBINARY:
             return TypeKind.BLOB;
+        case Types.STRUCT:
+            return TypeKind.STRUCT;
         default:
             return TypeKind.NONE;
         }
@@ -934,17 +911,6 @@ public class SQLDatasourceUtils {
         } else {
             return new String(data, Charset.defaultCharset());
         }
-    }
-
-    /**
-     * This will retrieve the string value for the given input stream.
-     *
-     * @param inputStream input stream data
-     */
-    public static String getString(InputStream inputStream) {
-        String value = getStringFromInputStream(inputStream);
-        byte[] encode = getBase64Encode(value);
-        return new String(encode, Charset.defaultCharset());
     }
 
     /**

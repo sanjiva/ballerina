@@ -17,8 +17,6 @@
  */
 package org.ballerinalang.runtime.message;
 
-import org.wso2.carbon.messaging.MessageDataSource;
-
 import java.io.OutputStream;
 import java.util.Map;
 
@@ -58,11 +56,8 @@ public class BallerinaMessageDataSource implements MessageDataSource {
     }
 
     @Override
-    public void serializeData() {
+    public void serializeData(OutputStream outputStream) {
         // This is where we write to output stream
-    }
-
-    public void setOutputStream(OutputStream outputStream) {
     }
 
     @Override
