@@ -90,7 +90,7 @@ connector MockHttpClient (string serviceUri, http:Options connectorOptions) {
         http:HttpConnectorError err;
         actualRequestNumber = actualRequestNumber + 1;
 
-        string scenario = req.getHeader(TEST_SCENARIO_HEADER).value;
+        string scenario = req.getHeader(TEST_SCENARIO_HEADER);
 
         if (scenario == SCENARIO_TYPICAL) {
             response, err = handleScenario1(actualRequestNumber);
@@ -141,12 +141,13 @@ function getErrorStruct () (http:HttpConnectorError) {
 
 function getResponse () (http:InResponse) {
     // TODO: The way the status code is set may need to be changed once struct fields can be made read-only
-    MockInResponse response = {};
+    http:InResponse response = {};
+  //  MockInResponse response = {};
     response.statusCode = 200;
-    return (http:InResponse) response;
+    return response;
 }
 
-struct MockInResponse {
+public struct MockInResponse {
     int statusCode;
     string reasonPhrase;
     string server;

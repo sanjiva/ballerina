@@ -27,10 +27,11 @@ import org.ballerinalang.model.types.BStructType;
 import org.ballerinalang.model.values.BJSON;
 import org.ballerinalang.model.values.BMap;
 import org.ballerinalang.model.values.BRefValueArray;
+import org.ballerinalang.model.values.BStringArray;
 import org.ballerinalang.model.values.BStruct;
 import org.ballerinalang.model.values.BValue;
 import org.ballerinalang.model.values.BXMLItem;
-import org.ballerinalang.net.http.Constants;
+import org.ballerinalang.net.http.HttpConstants;
 import org.ballerinalang.net.http.HttpUtil;
 import org.ballerinalang.test.services.testutils.HTTPTestRequest;
 import org.ballerinalang.test.services.testutils.MessageUtils;
@@ -61,7 +62,6 @@ import static org.ballerinalang.mime.util.Constants.ENTITY_HEADERS_INDEX;
 import static org.ballerinalang.mime.util.Constants.ENTITY_NAME_INDEX;
 import static org.ballerinalang.mime.util.Constants.FILE;
 import static org.ballerinalang.mime.util.Constants.FILE_PATH_INDEX;
-import static org.ballerinalang.mime.util.Constants.HEADER_VALUE_STRUCT;
 import static org.ballerinalang.mime.util.Constants.JSON_DATA_INDEX;
 import static org.ballerinalang.mime.util.Constants.MEDIA_TYPE;
 import static org.ballerinalang.mime.util.Constants.MESSAGE_ENTITY;
@@ -83,12 +83,11 @@ public class MultipartRequestTest {
     private static final Logger LOG = LoggerFactory.getLogger(MultipartRequestTest.class);
 
     private CompileResult result, serviceResult;
-    private final String requestStruct = Constants.IN_REQUEST;
-    private final String protocolPackageHttp = Constants.PROTOCOL_PACKAGE_HTTP;
+    private final String requestStruct = HttpConstants.IN_REQUEST;
+    private final String protocolPackageHttp = HttpConstants.PROTOCOL_PACKAGE_HTTP;
     private final String protocolPackageMime = PROTOCOL_PACKAGE_MIME;
     private final String protocolPackageFile = PROTOCOL_PACKAGE_FILE;
-    private final String entityStruct = Constants.ENTITY;
-    private final String headerValueStruct = HEADER_VALUE_STRUCT;
+    private final String entityStruct = HttpConstants.ENTITY;
     private final String mediaTypeStruct = MEDIA_TYPE;
     private String sourceFilePath = "test-src/mime/multipart-request.bal";
     private final String carbonMessage = "CarbonMessage";
@@ -302,9 +301,7 @@ public class MultipartRequestTest {
             bodyPart.setStringField(ENTITY_NAME_INDEX, "Text File Part");
             MimeUtil.setContentType(getMediaTypeStruct(), bodyPart, TEXT_PLAIN);
             BMap<String, BValue> headerMap = new BMap<>();
-            BStruct headerStruct = getHeaderValueStruct();
-            headerStruct.setStringField(0, contentTransferEncoding);
-            headerMap.put(CONTENT_TRANSFER_ENCODING, headerStruct);
+            headerMap.put(CONTENT_TRANSFER_ENCODING, new BStringArray(new String[]{contentTransferEncoding}));
             bodyPart.setRefField(ENTITY_HEADERS_INDEX, headerMap);
             return bodyPart;
         } catch (IOException e) {
@@ -444,7 +441,7 @@ public class MultipartRequestTest {
     private Map<String, Object> createPrerequisiteMessages(String path) {
         Map<String, Object> messageMap = new HashMap<>();
         BStruct request = getRequestStruct();
-        HTTPTestRequest cMsg = MessageUtils.generateHTTPMessageForMultiparts(path, Constants.HTTP_METHOD_POST);
+        HTTPTestRequest cMsg = MessageUtils.generateHTTPMessageForMultiparts(path, HttpConstants.HTTP_METHOD_POST);
         HttpUtil.addCarbonMsg(request, cMsg);
         BStruct entity = getEntityStruct();
         MimeUtil.setContentType(getMediaTypeStruct(), entity, MULTIPART_FORM_DATA);
@@ -511,10 +508,5 @@ public class MultipartRequestTest {
     private BStruct getMediaTypeStruct() {
         return BCompileUtil.createAndGetStruct(result.getProgFile(), protocolPackageMime,
                 mediaTypeStruct);
-    }
-
-    private BStruct getHeaderValueStruct() {
-        return BCompileUtil.createAndGetStruct(result.getProgFile(), protocolPackageMime,
-                headerValueStruct);
     }
 }
