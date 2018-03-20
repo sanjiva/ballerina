@@ -21,6 +21,7 @@ import React from 'react';
 import cn from 'classnames';
 import PropTypes from 'prop-types';
 import SplitPane from 'react-split-pane';
+import { Loader, Dimmer } from 'semantic-ui-react';
 import CSSTransitionGroup from 'react-transition-group/CSSTransitionGroup';
 import DebugManager from 'plugins/debugger/DebugManager/DebugManager'; // FIXME: Importing from debugger plugin
 import TreeUtil from 'plugins/ballerina/model/tree-util.js';
@@ -36,7 +37,8 @@ import SwaggerView from './swagger-view.jsx';
 import PackageScopedEnvironment from './../env/package-scoped-environment';
 import BallerinaEnvFactory from './../env/ballerina-env-factory';
 import BallerinaEnvironment from './../env/environment';
-import { DESIGN_VIEW, SOURCE_VIEW, SWAGGER_VIEW, CHANGE_EVT_TYPES, CLASSES, SPLIT_VIEW } from './constants';
+import { DESIGN_VIEW, SOURCE_VIEW, SWAGGER_VIEW,
+        CHANGE_EVT_TYPES, CLASSES, SPLIT_VIEW } from './constants';
 import FindBreakpointNodesVisitor from './../visitors/find-breakpoint-nodes-visitor';
 import SyncLineNumbersVisitor from './../visitors/sync-line-numbers';
 import SyncBreakpointsVisitor from './../visitors/sync-breakpoints';
@@ -48,7 +50,6 @@ import ErrorMappingVisitor from './../visitors/error-mapping-visitor';
 import SyncErrorsVisitor from './../visitors/sync-errors';
 import { EVENTS } from '../constants';
 import ViewButton from './view-button';
-
 
 /**
  * React component for BallerinaFileEditor.
@@ -75,6 +76,8 @@ class BallerinaFileEditor extends React.Component {
             model: undefined,
             activeView: this.fetchState('activeView', SPLIT_VIEW),
             splitSize: this.fetchState('splitSize', (this.props.width / 2)),
+            diagramMode: this.fetchState('diagramMode', 'action'),
+            diagramFitToWidth: this.fetchState('diagramFitToWidth', true),
             lastRenderedTimestamp: undefined,
         };
         this.skipLoadingOverlay = false;
@@ -150,6 +153,7 @@ class BallerinaFileEditor extends React.Component {
 
         this.resetSwaggerView = this.resetSwaggerView.bind(this);
         this.handleSplitChange = this.handleSplitChange.bind(this);
+        this.onModeChange = this.onModeChange.bind(this);
     }
 
     /**
@@ -263,10 +267,35 @@ class BallerinaFileEditor extends React.Component {
     }
 
     /**
+     * Change the diagram mode.
+     *
+     * @param {any} data event data
+     * @memberof BallerinaFileEditor
+     */
+    onModeChange(data) {
+        this.setState({
+            diagramMode: data.mode,
+            diagramFitToWidth: data.fitToWidth,
+        });
+        this.persistState();
+    }
+
+    /**
      * @returns {File} file associated with the editor
      */
     getFile() {
         return this.props.file;
+    }
+
+    /**
+     * Change the diagram fitto width.
+     *
+     * @param {any} newState
+     * @memberof BallerinaFileEditor
+     */
+    handleFitToWidthChange(state) {
+        this.setState({ diagramFitToWidth: state });
+        this.persistState();
     }
 
     handleSplitChange(size) {
@@ -551,6 +580,8 @@ class BallerinaFileEditor extends React.Component {
         appContext.pref.put(this.props.file.id, {
             activeView: this.state.activeView,
             splitSize: this.state.splitSize,
+            diagramFitToWidth: this.state.diagramFitToWidth,
+            diagramMode: this.state.diagramMode,
         });
     }
 
@@ -562,7 +593,7 @@ class BallerinaFileEditor extends React.Component {
     fetchState(attribute, defaultVal = undefined) {
         const appContext = this.props.ballerinaPlugin.appContext;
         const data = appContext.pref.get(this.props.file.id);
-        return (data && data[attribute]) ? data[attribute] : defaultVal;
+        return (data && !_.isNil(data[attribute])) ? data[attribute] : defaultVal;
     }
 
     resetSwaggerView() {
@@ -643,11 +674,9 @@ class BallerinaFileEditor extends React.Component {
                     transitionLeaveTimeout={300}
                 >
                     {showLoadingOverlay &&
-                        <div className='bal-file-editor-loading-container'>
-                            <div id='parse-pending-loader'>
-                                Loading
-                            </div>
-                        </div>
+                        <Dimmer active inverted>
+                            <Loader size='large'>Loading</Loader>
+                        </Dimmer>
                     }
                 </CSSTransitionGroup>
                 <DesignView
@@ -659,6 +688,9 @@ class BallerinaFileEditor extends React.Component {
                     height={this.props.height}
                     panelResizeInProgress={this.props.panelResizeInProgress}
                     disabled={this.state.parseFailed}
+                    onModeChange={this.onModeChange}
+                    mode={this.state.diagramMode}
+                    fitToWidth={this.state.diagramFitToWidth}
                 />
             </div>
         );

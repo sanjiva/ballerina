@@ -84,6 +84,10 @@ public function createCache (string name, int expiryTimeMillis, int capacity, fl
     return cache;
 }
 
+public function <Cache cache> hasKey (string key) returns (boolean) {
+    return cache.entries.hasKey(key);
+}
+
 @Description {value:"Returns the size of the cache."}
 @Return {value:"int: The size of the cache"}
 public function <Cache cache> size () returns (int) {
@@ -115,13 +119,13 @@ function <Cache cache> evictCache () {
     string[] cacheKeys = cache.getLRUCacheKeys(numberOfKeysToEvict);
     // Iterate through the map and remove entries.
     foreach c in cacheKeys {
-        cache.entries.remove(c);
+        _ = cache.entries.remove(c);
     }
 }
 
 @Description {value:"Returns the cached value associated with the given key. Returns null if the provided key does not exist in the cache."}
 @Param {value:"key: key which is used to retrieve the cached value"}
-@Return { value:"The cached value associated with the given key" }
+@Return {value:"The cached value associated with the given key"}
 public function <Cache cache> get (string key) returns (any) {
     any value = cache.entries[key];
     if (value == null) {
@@ -138,7 +142,7 @@ public function <Cache cache> get (string key) returns (any) {
 @Description {value:"Removes a cached value from a cache."}
 @Param {value:"key: key of the cache entry which needs to be removed"}
 public function <Cache cache> remove (string key) {
-    cache.entries.remove(key);
+    _ = cache.entries.remove(key);
 }
 
 @Description {value:"Removes expired cache entries from all caches."}
@@ -181,7 +185,7 @@ function runCacheExpiry () returns (error) {
         foreach currentKeyIndex in [0..cachesToBeRemovedIndex) {
             string key = cachesToBeRemoved[currentKeyIndex];
             // Remove the cache entry.
-            currentCacheEntries.remove(key);
+            _ = currentCacheEntries.remove(key);
         }
     }
     return null;
@@ -189,7 +193,7 @@ function runCacheExpiry () returns (error) {
 
 @Description {value:"Returns the key of the Least Recently Used cache entry. This is used to remove cache entries if the cache is full."}
 @Return {value:"numberOfKeysToEvict - number of keys to be evicted"}
-function <Cache cache> getLRUCacheKeys (int numberOfKeysToEvict) (string[]) {
+function <Cache cache> getLRUCacheKeys (int numberOfKeysToEvict) returns (string[]) {
     // Create new arrays to hold keys to be removed and hold the corresponding timestamps.
     string[] cacheKeysToBeRemoved = [];
     int[] timestamps = [];
@@ -235,7 +239,7 @@ function checkAndAdd (int numberOfKeysToEvict, string[] cacheKeys, int[] timesta
 
 @Description {value:"Creates a new cache cleanup task."}
 @Return {value:"string: cache cleanup task ID"}
-function createCacheCleanupTask () (string) {
+function createCacheCleanupTask () returns (string) {
     function () returns (error) onTriggerFunction = runCacheExpiry;
     function (error) onErrorFunction = null;
     var cacheCleanupTaskID, schedulerError = task:scheduleTimer(onTriggerFunction, onErrorFunction, {delay:CACHE_CLEANUP_START_DELAY, interval:CACHE_CLEANUP_INTERVAL});

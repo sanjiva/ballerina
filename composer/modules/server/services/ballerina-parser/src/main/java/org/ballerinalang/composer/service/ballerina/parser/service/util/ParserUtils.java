@@ -196,10 +196,15 @@ public class ParserUtils {
 
         CompilerContext context = prepareCompilerContext("", "");
         // load builtin packages - ballerina.builtin and ballerina.builtin.core explicitly
-        BLangPackage builtInPackage = loadBuiltInPackage(context);
-        String builtInPackageName = builtInPackage.getPackageDeclaration().getPackageName().stream()
-                .map(name -> name.getValue()).collect(Collectors.joining("."));
-        loadPackageMap(builtInPackageName, builtInPackage, modelPackage);
+        try {
+            BLangPackage builtInPackage = loadBuiltInPackage(context);
+            String builtInPackageName = builtInPackage.getPackageDeclaration().getPackageName().stream()
+                    .map(name -> name.getValue()).collect(Collectors.joining("."));
+            loadPackageMap(builtInPackageName, builtInPackage, modelPackage);
+        } catch (Exception e) {
+            // Above catch is to fail safe composer front end due to core errors.
+            logger.warn("Error while loading package ballerina.builtin");
+        }
         PackageLoader packageLoader = PackageLoader.getInstance(context);
         // max depth for the recursive function which search for child directories
         int maxDepth = 15;
@@ -220,7 +225,7 @@ public class ParserUtils {
                 if (!"ballerina.builtin".equals(pkg.getName().getValue())
                         && !"ballerina.builtin.core".equals(pkg.getName().getValue())) {
                     org.wso2.ballerinalang.compiler.tree.BLangPackage bLangPackage = packageLoader
-                            .loadPackage(orgNameNode, pkgNameComps, bLangIdentifier);
+                            .loadAndDefinePackage(orgNameNode, pkgNameComps, bLangIdentifier);
                     loadPackageMap(pkg.getName().getValue(), bLangPackage, modelPackage);
                 }
             } catch (Exception e) {

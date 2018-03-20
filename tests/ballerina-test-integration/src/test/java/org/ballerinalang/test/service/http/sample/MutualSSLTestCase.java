@@ -24,11 +24,10 @@ import org.ballerinalang.test.context.LogLeecher;
 import org.ballerinalang.test.context.ServerInstance;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.Test;
-
 import java.io.File;
 
 /**
- * Testing Mutual SSL
+ * Testing Mutual SSL.
  */
 public class MutualSSLTestCase extends IntegrationTestCase {
 
@@ -39,13 +38,13 @@ public class MutualSSLTestCase extends IntegrationTestCase {
     @Test (enabled = false)
     public void setUp() throws BallerinaTestException {
         String serverBal = new File(
-                "src" + File.separator + "test" + File.separator + "resources" + File.separator + "MutualSSL"
+                "src" + File.separator + "test" + File.separator + "resources" + File.separator + "mutualSSL"
                         + File.separator + "mutualSSLServer.bal").getAbsolutePath();
         ballerinaServer = ServerInstance.initBallerinaServer();
         ballerinaServer.startBallerinaServer(serverBal);
     }
 
-    @Test(enabled = false, description = "Test mutual ssl")
+    @Test (enabled = false, description = "Test mutual ssl")
     public void testMutualSSL() throws Exception {
         serverZipPath = System.getProperty(Constant.SYSTEM_PROP_SERVER_ZIP);
         String serverMessage = "successful";
@@ -55,7 +54,7 @@ public class MutualSSLTestCase extends IntegrationTestCase {
         ballerinaServer.addLogLeecher(serverLeecher);
 
         String[] clientArgs = {new File("src" + File.separator + "test" + File.separator + "resources"
-                + File.separator + "MutualSSL" + File.separator + "mutualSSLClient.bal").getAbsolutePath()};
+                + File.separator + "mutualSSL" + File.separator + "mutualSSLClient.bal").getAbsolutePath()};
 
         ballerinaClient = new ServerInstance(serverZipPath);
         LogLeecher clientLeecher = new LogLeecher(serverResponse);
@@ -65,7 +64,7 @@ public class MutualSSLTestCase extends IntegrationTestCase {
         clientLeecher.waitForText(20000);
     }
 
-    @AfterClass(enabled = false)
+    @AfterClass (enabled = false)
     private void cleanup() throws Exception {
         ballerinaServer.stopServer();
         ballerinaClient.stopServer();

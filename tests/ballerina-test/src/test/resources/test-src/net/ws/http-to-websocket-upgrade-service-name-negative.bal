@@ -15,9 +15,9 @@ service<http> httpService {
         path:"/world",
         methods:["POST","GET","PUT","My"]
     }
-    resource testResource(http:Connection conn, http:InRequest req) {
-        http:OutResponse resp = {};
-        string payload = req.getStringPayload();
+    resource testResource(http:Connection conn, http:Request req) {
+        http:Response resp = {};
+        var payload, _ = req.getStringPayload();
         io:println(payload);
         resp.setStringPayload("I received");
         _ = conn.respond(resp);

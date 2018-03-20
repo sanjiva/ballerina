@@ -21,6 +21,8 @@ import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.TokenStream;
 import org.ballerinalang.langserver.DocumentServiceKeys;
 import org.ballerinalang.langserver.TextDocumentServiceContext;
+import org.ballerinalang.langserver.common.UtilSymbolKeys;
+import org.ballerinalang.langserver.common.utils.CommonUtil;
 import org.ballerinalang.langserver.completions.CompletionKeys;
 import org.ballerinalang.langserver.completions.SymbolInfo;
 import org.ballerinalang.langserver.completions.util.ItemResolverConstants;
@@ -44,8 +46,6 @@ import java.util.List;
  */
 public abstract class AbstractItemResolver {
     
-    private static final String NOT_FOUND_TYPE = "><";
-    
     public abstract ArrayList<CompletionItem> resolveItems(TextDocumentServiceContext completionContext);
 
     /**
@@ -67,7 +67,7 @@ public abstract class AbstractItemResolver {
                     && bSymbol instanceof BVarSymbol) {
                 completionItem = this.populateVariableDefCompletionItem(symbolInfo);
             } else if (bSymbol instanceof BTypeSymbol
-                    && !bSymbol.getName().getValue().equals(NOT_FOUND_TYPE)
+                    && !bSymbol.getName().getValue().equals(UtilSymbolKeys.NOT_FOUND_TYPE)
                     && !(bSymbol instanceof BAnnotationSymbol)) {
                 completionItem = this.populateBTypeCompletionItem(symbolInfo);
             }
@@ -220,20 +220,19 @@ public abstract class AbstractItemResolver {
      * @return {@link Boolean}
      */
     protected boolean isInvocationOrFieldAccess(TextDocumentServiceContext documentServiceContext) {
-        ArrayList<String> terminalTokens = new ArrayList<>(Arrays.asList(new String[]{";", "}", "{"}));
+        ArrayList<String> terminalTokens = new ArrayList<>(Arrays.asList(new String[]{";", "}", "{", "(", ")"}));
         TokenStream tokenStream = documentServiceContext.get(DocumentServiceKeys.TOKEN_STREAM_KEY);
+        if (tokenStream == null) {
+            return false;
+        }
         int searchTokenIndex = documentServiceContext.get(DocumentServiceKeys.TOKEN_INDEX_KEY);
-        String currentTokenStr = tokenStream.get(searchTokenIndex).getText();
-
-        if (terminalTokens.contains(currentTokenStr)) {
-            searchTokenIndex -= 1;
-            while (true) {
-                if (tokenStream.get(searchTokenIndex).getChannel() == Token.DEFAULT_CHANNEL) {
-                    break;
-                } else {
-                    searchTokenIndex -= 1;
-                }
-            }
+        
+        /*
+        In order to avoid the token index inconsistencies, current token index offsets from two default tokens
+         */
+        Token offsetToken = CommonUtil.getNthDefaultTokensToLeft(tokenStream, searchTokenIndex, 2);
+        if (!terminalTokens.contains(offsetToken.getText())) {
+            searchTokenIndex = offsetToken.getTokenIndex();
         }
 
         while (true) {
@@ -242,10 +241,13 @@ public abstract class AbstractItemResolver {
                 return false;
             }
             String tokenString = tokenStream.get(searchTokenIndex).getText();
-            if (terminalTokens.contains(tokenString)) {
+            if (terminalTokens.contains(tokenString)
+                    && documentServiceContext.get(DocumentServiceKeys.TOKEN_INDEX_KEY) <= searchTokenIndex) {
                 documentServiceContext.put(CompletionKeys.INVOCATION_STATEMENT_KEY, false);
                 return false;
-            } else if (tokenString.equals(".") || tokenString.equals(":")) {
+            } else if (UtilSymbolKeys.DOT_SYMBOL_KEY.equals(tokenString)
+                    || UtilSymbolKeys.PKG_DELIMITER_KEYWORD.equals(tokenString)
+                    || UtilSymbolKeys.ACTION_INVOCATION_SYMBOL_KEY.equals(tokenString)) {
                 documentServiceContext.put(CompletionKeys.INVOCATION_STATEMENT_KEY, true);
                 return true;
             } else {
@@ -335,7 +337,7 @@ public abstract class AbstractItemResolver {
         visibleSymbols.forEach(symbolInfo -> {
             BSymbol bSymbol = symbolInfo.getScopeEntry().symbol;
             if (bSymbol instanceof BTypeSymbol
-                    && !bSymbol.getName().getValue().equals(NOT_FOUND_TYPE)
+                    && !bSymbol.getName().getValue().equals(UtilSymbolKeys.NOT_FOUND_TYPE)
                     && !(bSymbol instanceof BAnnotationSymbol)) {
                 completionItems.add(this.populateBTypeCompletionItem(symbolInfo));
             }

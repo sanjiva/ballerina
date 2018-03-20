@@ -1,22 +1,21 @@
 /*
-*  Copyright (c) 2017, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
-*
-*  WSO2 Inc. licenses this file to you under the Apache License,
-*  Version 2.0 (the "License"); you may not use this file except
-*  in compliance with the License.
-*  You may obtain a copy of the License at
-*
-*    http://www.apache.org/licenses/LICENSE-2.0
-*
-*  Unless required by applicable law or agreed to in writing,
-*  software distributed under the License is distributed on an
-*  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-*  KIND, either express or implied.  See the License for the
-*  specific language governing permissions and limitations
-*  under the License.
-*/
+ *  Copyright (c) 2017, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *
+ *  WSO2 Inc. licenses this file to you under the Apache License,
+ *  Version 2.0 (the "License"); you may not use this file except
+ *  in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
 package org.wso2.ballerinalang.compiler.semantics.model;
-
 
 import org.ballerinalang.model.TreeBuilder;
 import org.ballerinalang.model.elements.PackageID;
@@ -35,11 +34,14 @@ import org.wso2.ballerinalang.compiler.semantics.model.types.BAnyType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BArrayType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BConnectorType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BErrorType;
+import org.wso2.ballerinalang.compiler.semantics.model.types.BFutureType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BInvokableType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BJSONType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BMapType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BNoType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BNullType;
+import org.wso2.ballerinalang.compiler.semantics.model.types.BStreamType;
+import org.wso2.ballerinalang.compiler.semantics.model.types.BStreamletType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BStructType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BTableType;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BType;
@@ -54,7 +56,9 @@ import org.wso2.ballerinalang.programfile.InstructionCodes;
 import org.wso2.ballerinalang.util.Flags;
 import org.wso2.ballerinalang.util.Lists;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @since 0.94
@@ -65,7 +69,6 @@ public class SymbolTable {
             new CompilerContext.Key<>();
 
     public static final PackageID BUILTIN = new PackageID(Names.ANON_ORG, Names.BUILTIN_PACKAGE, Names.DEFAULT_VERSION);
-
 
     public final BLangPackage rootPkgNode;
     public final BPackageSymbol rootPkgSymbol;
@@ -78,16 +81,19 @@ public class SymbolTable {
     public final BType stringType = new BType(TypeTags.STRING, null);
     public final BType booleanType = new BType(TypeTags.BOOLEAN, null);
     public final BType blobType = new BType(TypeTags.BLOB, null);
-    public final BType typeType = new BType(TypeTags.TYPE, null);
+    public final BType typeDesc = new BType(TypeTags.TYPEDESC, null);
     public final BType jsonType = new BJSONType(TypeTags.JSON, noType, null);
     public final BType xmlType = new BXMLType(TypeTags.XML, null);
     public final BType tableType = new BTableType(TypeTags.TABLE, noType, null);
+    public final BType streamType = new BStreamType(TypeTags.STREAM, noType, null);
     public final BType anyType = new BAnyType(TypeTags.ANY, null);
     public final BType mapType = new BMapType(TypeTags.MAP, anyType, null);
+    public final BType futureType = new BFutureType(TypeTags.FUTURE, noType, null);
     public final BType nullType = new BNullType();
-    public final BType voidType = new BNoType(TypeTags.VOID);
     public final BType xmlAttributesType = new BXMLAttributesType(TypeTags.XML_ATTRIBUTES);
     public final BType connectorType = new BConnectorType(null, null);
+    public final BType endpointType = new BType(TypeTags.CONNECTOR, null);
+    public final BType streamletType = new BStreamletType(null, null);
     public final BType arrayType = new BArrayType(noType);
 
     public final BTypeSymbol errSymbol;
@@ -96,9 +102,11 @@ public class SymbolTable {
     public BStructType errStructType;
 
     public BPackageSymbol builtInPackageSymbol;
-    public BPackageSymbol runtimePackageSymbol;
 
     private Names names;
+
+    public Map<PackageID, BPackageSymbol> pkgSymbolMap = new HashMap<>();
+    public Map<BPackageSymbol, SymbolEnv> pkgEnvMap = new HashMap<>();
 
     public static SymbolTable getInstance(CompilerContext context) {
         SymbolTable symTable = context.get(SYM_TABLE_KEY);
@@ -128,11 +136,14 @@ public class SymbolTable {
         initializeType(stringType, TypeKind.STRING.typeName());
         initializeType(booleanType, TypeKind.BOOLEAN.typeName());
         initializeType(blobType, TypeKind.BLOB.typeName());
-        initializeType(typeType, TypeKind.TYPE.typeName());
+        initializeType(typeDesc, TypeKind.TYPEDESC.typeName());
         initializeType(jsonType, TypeKind.JSON.typeName());
         initializeType(xmlType, TypeKind.XML.typeName());
         initializeType(tableType, TypeKind.TABLE.typeName());
+        initializeType(streamType, TypeKind.STREAM.typeName());
+        initializeType(streamletType, TypeKind.STREAMLET.typeName());
         initializeType(mapType, TypeKind.MAP.typeName());
+        initializeType(futureType, TypeKind.FUTURE.typeName());
         initializeType(anyType, TypeKind.ANY.typeName());
 
         // Initialize error type;
@@ -171,6 +182,10 @@ public class SymbolTable {
                 return xmlType;
             case TypeTags.TABLE:
                 return tableType;
+            case TypeTags.STREAM:
+                return streamType;
+            case TypeTags.STREAMLET:
+                return streamletType;
             case TypeTags.NULL:
                 return nullType;
             default:
@@ -229,19 +244,23 @@ public class SymbolTable {
         defineBinaryOperator(OperatorKind.EQUAL, floatType, floatType, booleanType, InstructionCodes.FEQ);
         defineBinaryOperator(OperatorKind.EQUAL, booleanType, booleanType, booleanType, InstructionCodes.BEQ);
         defineBinaryOperator(OperatorKind.EQUAL, stringType, stringType, booleanType, InstructionCodes.SEQ);
-        defineBinaryOperator(OperatorKind.EQUAL, typeType, typeType, booleanType, InstructionCodes.TEQ);
+        defineBinaryOperator(OperatorKind.EQUAL, typeDesc, typeDesc, booleanType, InstructionCodes.TEQ);
         defineBinaryOperator(OperatorKind.EQUAL, jsonType, nullType, booleanType, InstructionCodes.REQ);
         defineBinaryOperator(OperatorKind.EQUAL, nullType, jsonType, booleanType, InstructionCodes.REQ);
         defineBinaryOperator(OperatorKind.EQUAL, xmlType, nullType, booleanType, InstructionCodes.REQ);
         defineBinaryOperator(OperatorKind.EQUAL, nullType, xmlType, booleanType, InstructionCodes.REQ);
         defineBinaryOperator(OperatorKind.EQUAL, tableType, nullType, booleanType, InstructionCodes.REQ);
         defineBinaryOperator(OperatorKind.EQUAL, nullType, tableType, booleanType, InstructionCodes.REQ);
+        defineBinaryOperator(OperatorKind.EQUAL, streamType, nullType, booleanType, InstructionCodes.REQ);
+        defineBinaryOperator(OperatorKind.EQUAL, nullType, streamType, booleanType, InstructionCodes.REQ);
         defineBinaryOperator(OperatorKind.EQUAL, anyType, nullType, booleanType, InstructionCodes.REQ);
         defineBinaryOperator(OperatorKind.EQUAL, nullType, anyType, booleanType, InstructionCodes.REQ);
         defineBinaryOperator(OperatorKind.EQUAL, mapType, nullType, booleanType, InstructionCodes.REQ);
         defineBinaryOperator(OperatorKind.EQUAL, nullType, mapType, booleanType, InstructionCodes.REQ);
         defineBinaryOperator(OperatorKind.EQUAL, connectorType, nullType, booleanType, InstructionCodes.REQ);
         defineBinaryOperator(OperatorKind.EQUAL, nullType, connectorType, booleanType, InstructionCodes.REQ);
+        defineBinaryOperator(OperatorKind.EQUAL, streamletType, nullType, booleanType, InstructionCodes.REQ);
+        defineBinaryOperator(OperatorKind.EQUAL, nullType, streamletType, booleanType, InstructionCodes.REQ);
         defineBinaryOperator(OperatorKind.EQUAL, nullType, arrayType, booleanType, InstructionCodes.REQ);
         defineBinaryOperator(OperatorKind.EQUAL, arrayType, nullType, booleanType, InstructionCodes.REQ);
         defineBinaryOperator(OperatorKind.EQUAL, nullType, nullType, booleanType, InstructionCodes.REQ);
@@ -251,19 +270,23 @@ public class SymbolTable {
         defineBinaryOperator(OperatorKind.NOT_EQUAL, floatType, floatType, booleanType, InstructionCodes.FNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, booleanType, booleanType, booleanType, InstructionCodes.BNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, stringType, stringType, booleanType, InstructionCodes.SNE);
-        defineBinaryOperator(OperatorKind.NOT_EQUAL, typeType, typeType, booleanType, InstructionCodes.TNE);
+        defineBinaryOperator(OperatorKind.NOT_EQUAL, typeDesc, typeDesc, booleanType, InstructionCodes.TNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, jsonType, nullType, booleanType, InstructionCodes.RNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, nullType, jsonType, booleanType, InstructionCodes.RNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, xmlType, nullType, booleanType, InstructionCodes.RNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, nullType, xmlType, booleanType, InstructionCodes.RNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, tableType, nullType, booleanType, InstructionCodes.RNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, nullType, tableType, booleanType, InstructionCodes.RNE);
+        defineBinaryOperator(OperatorKind.NOT_EQUAL, streamType, nullType, booleanType, InstructionCodes.RNE);
+        defineBinaryOperator(OperatorKind.NOT_EQUAL, nullType, streamType, booleanType, InstructionCodes.RNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, anyType, nullType, booleanType, InstructionCodes.RNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, nullType, anyType, booleanType, InstructionCodes.RNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, mapType, nullType, booleanType, InstructionCodes.RNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, nullType, mapType, booleanType, InstructionCodes.RNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, connectorType, nullType, booleanType, InstructionCodes.RNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, nullType, connectorType, booleanType, InstructionCodes.RNE);
+        defineBinaryOperator(OperatorKind.NOT_EQUAL, streamletType, nullType, booleanType, InstructionCodes.RNE);
+        defineBinaryOperator(OperatorKind.NOT_EQUAL, nullType, streamletType, booleanType, InstructionCodes.RNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, nullType, arrayType, booleanType, InstructionCodes.RNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, arrayType, nullType, booleanType, InstructionCodes.RNE);
         defineBinaryOperator(OperatorKind.NOT_EQUAL, nullType, nullType, booleanType, InstructionCodes.RNE);
@@ -310,6 +333,20 @@ public class SymbolTable {
         defineUnaryOperator(OperatorKind.LENGTHOF, stringType, intType, InstructionCodes.LENGTHOF);
         defineUnaryOperator(OperatorKind.LENGTHOF, blobType, intType, InstructionCodes.LENGTHOF);
 
+        defineUnaryOperator(OperatorKind.UNTAINT, intType, intType, InstructionCodes.NOP);
+        defineUnaryOperator(OperatorKind.UNTAINT, floatType, floatType, InstructionCodes.NOP);
+        defineUnaryOperator(OperatorKind.UNTAINT, booleanType, booleanType, InstructionCodes.NOP);
+        defineUnaryOperator(OperatorKind.UNTAINT, stringType, stringType, InstructionCodes.NOP);
+        defineUnaryOperator(OperatorKind.UNTAINT, typeDesc, typeDesc, InstructionCodes.NOP);
+        defineUnaryOperator(OperatorKind.UNTAINT, jsonType, jsonType, InstructionCodes.NOP);
+        defineUnaryOperator(OperatorKind.UNTAINT, xmlType, xmlType, InstructionCodes.NOP);
+        defineUnaryOperator(OperatorKind.UNTAINT, tableType, tableType, InstructionCodes.NOP);
+        defineUnaryOperator(OperatorKind.UNTAINT, anyType, anyType, InstructionCodes.NOP);
+        defineUnaryOperator(OperatorKind.UNTAINT, mapType, mapType, InstructionCodes.NOP);
+        defineUnaryOperator(OperatorKind.UNTAINT, connectorType, connectorType, InstructionCodes.NOP);
+        defineUnaryOperator(OperatorKind.UNTAINT, arrayType, arrayType, InstructionCodes.NOP);
+        defineUnaryOperator(OperatorKind.UNTAINT, nullType, nullType, InstructionCodes.NOP);
+
         defineCastOperators();
         defineConversionOperators();
     }
@@ -326,7 +363,7 @@ public class SymbolTable {
         defineCastOperator(booleanType, jsonType, true, InstructionCodes.B2JSON);
         defineCastOperator(booleanType, anyType, true, InstructionCodes.B2ANY);
         defineCastOperator(blobType, anyType, true, InstructionCodes.L2ANY);
-        defineCastOperator(typeType, anyType, true, InstructionCodes.NOP);
+        defineCastOperator(typeDesc, anyType, true, InstructionCodes.NOP);
         defineCastOperator(nullType, stringType, true, InstructionCodes.NULL2S);
 
         // Define explicit cast operators
@@ -335,11 +372,13 @@ public class SymbolTable {
         defineExplicitCastOperator(anyType, stringType, false, InstructionCodes.ANY2S);
         defineExplicitCastOperator(anyType, booleanType, false, InstructionCodes.ANY2B);
         defineExplicitCastOperator(anyType, blobType, false, InstructionCodes.ANY2L);
-        defineExplicitCastOperator(anyType, typeType, false, InstructionCodes.ANY2TYPE);
+        defineExplicitCastOperator(anyType, typeDesc, false, InstructionCodes.ANY2TYPE);
         defineExplicitCastOperator(anyType, jsonType, false, InstructionCodes.ANY2JSON);
         defineExplicitCastOperator(anyType, xmlType, false, InstructionCodes.ANY2XML);
         defineExplicitCastOperator(anyType, mapType, false, InstructionCodes.ANY2MAP);
         defineExplicitCastOperator(anyType, tableType, false, InstructionCodes.ANY2DT);
+        defineExplicitCastOperator(anyType, streamType, false, InstructionCodes.ANYSTM);
+        defineExplicitCastOperator(anyType, streamletType, false, InstructionCodes.ANY2M);
 
         defineExplicitCastOperator(jsonType, intType, false, InstructionCodes.JSON2I);
         defineExplicitCastOperator(jsonType, floatType, false, InstructionCodes.JSON2F);
