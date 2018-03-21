@@ -68,6 +68,7 @@ import org.wso2.ballerinalang.compiler.tree.BLangXMLNS.BLangLocalXMLNS;
 import org.wso2.ballerinalang.compiler.tree.BLangXMLNS.BLangPackageXMLNS;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangArrayLiteral;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangArrayLiteral.BLangJSONArrayLiteral;
+import org.wso2.ballerinalang.compiler.tree.expressions.BLangAwaitExpr;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangBinaryExpr;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangBracedOrTupleExpr;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangExpression;
@@ -404,11 +405,7 @@ public class Desugar extends BLangNodeVisitor {
         }
 
         // Return if this assignment is not a safe assignment
-        if (varNode.expr != null) {
-            varNode.expr = rewriteExpr(varNode.expr);
-        } else {
-            varNode.expr = getInitExpr(varNode.type);
-        }
+        varNode.expr = rewriteExpr(varNode.expr);
         result = varNode;
 
     }
@@ -447,6 +444,12 @@ public class Desugar extends BLangNodeVisitor {
 
         varDefNode.var = rewrite(varDefNode.var, env);
         BLangVariable varNode = varDefNode.var;
+
+        // Generate default init expression, if rhs expr is null
+        if (varNode.expr == null) {
+            varNode.expr = getInitExpr(varNode.type);
+        }
+
         if (!varNode.safeAssignment) {
             result = varDefNode;
             return;
@@ -689,7 +692,6 @@ public class Desugar extends BLangNodeVisitor {
         //      io:println("string value: " + s);
         //  }
 
-        matchStmt.expr = rewriteExpr(matchStmt.expr);
 
         // First create a block statement to hold generated statements
         BLangBlockStmt matchBlockStmt = (BLangBlockStmt) TreeBuilder.createBlockNode();
@@ -826,6 +828,11 @@ public class Desugar extends BLangNodeVisitor {
         }
 
         result = rewriteExpr(expr);
+    }
+
+    @Override
+    public void visit(BLangTableLiteral tableLiteral) {
+        result = tableLiteral;
     }
 
     @Override
@@ -993,6 +1000,12 @@ public class Desugar extends BLangNodeVisitor {
         ternaryExpr.thenExpr = rewriteExpr(ternaryExpr.thenExpr);
         ternaryExpr.elseExpr = rewriteExpr(ternaryExpr.elseExpr);
         result = ternaryExpr;
+    }
+    
+    @Override
+    public void visit(BLangAwaitExpr awaitExpr) {
+        awaitExpr.expr = rewriteExpr(awaitExpr.expr);
+        result = awaitExpr;
     }
 
     @Override
@@ -1235,6 +1248,14 @@ public class Desugar extends BLangNodeVisitor {
     @Override
     public void visit(BLangMapLiteral mapLiteral) {
         result = mapLiteral;
+    }
+
+    public void visit(BLangRecordLiteral.BLangStreamletLiteral streamletLiteral) {
+        result = streamletLiteral;
+    }
+
+    public void visit(BLangStreamLiteral streamLiteral) {
+        result = streamLiteral;
     }
 
     @Override
