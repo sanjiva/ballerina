@@ -529,6 +529,7 @@ public class CPU {
                 case InstructionCodes.JSON2B:
                 case InstructionCodes.NULL2S:
                 case InstructionCodes.IS_ASSIGNABLE:
+                case InstructionCodes.CHECK_CONVERSION:
                     execTypeCastOpcodes(ctx, sf, opcode, operands);
                     break;
 
@@ -1928,6 +1929,12 @@ public class CPU {
             case InstructionCodes.NULL2S:
                 j = operands[1];
                 sf.stringRegs[j] = null;
+                break;
+            case InstructionCodes.CHECK_CONVERSION:
+                i = operands[0];
+                j = operands[1];
+                bRefTypeValue = sf.refRegs[i];
+                sf.refRegs[j] = JSONUtils.convertUnionTypeToJSON(bRefTypeValue);
                 break;
             default:
                 throw new UnsupportedOperationException();
@@ -3502,7 +3509,6 @@ public class CPU {
         int i = operands[0];
         int cpIndex = operands[1];
         int j = operands[2];
-        int k = operands[3];
 
         TypeRefCPEntry typeRefCPEntry = (TypeRefCPEntry) ctx.constPool[cpIndex];
         BJSON bjson = (BJSON) sf.refRegs[i];
@@ -3513,12 +3519,10 @@ public class CPU {
 
         try {
             sf.refRegs[j] = JSONUtils.convertJSONToStruct(bjson, (BStructType) typeRefCPEntry.getType());
-            sf.refRegs[k] = null;
         } catch (Exception e) {
-            sf.refRegs[j] = null;
             String errorMsg = "cannot convert '" + TypeConstants.JSON_TNAME + "' to type '" +
                     typeRefCPEntry.getType() + "': " + e.getMessage();
-            handleTypeConversionError(ctx, sf, k, errorMsg);
+            handleTypeConversionError(ctx, sf, j, errorMsg);
         }
     }
 
