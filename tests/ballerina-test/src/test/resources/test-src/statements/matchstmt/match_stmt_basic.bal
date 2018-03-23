@@ -168,14 +168,6 @@ struct Man {
     int age;
 }
 
-struct Woman {
-    string name;
-    function (int, string) returns string | null foo;
-    int age;
-    string color;
-}
-
-
 function testMatchStatementBasics16() returns (string | int | boolean) {
 
      Human m = {name:"Piyal"};
@@ -185,6 +177,71 @@ function testMatchStatementBasics16() returns (string | int | boolean) {
         Human h => return h.name;
     }
 }
+
+struct Woman {
+    string fname;
+    (function (int, string) returns string) | Human foo;
+    int age;
+    string color;
+}
+
+function fp_xyz (int a, string k) returns string {
+    return "fp call return";
+}
+
+function testMatchStatementBasics17() returns (string | int | boolean) {
+
+    Human h = {name:"sirisena"};
+     Woman m = {fname:"Piyal", foo:fp_xyz};
+
+    match m.foo {
+        function (int, string) returns string fp => return "function pointer matched";
+        Human r => return r.name;
+    }
+}
+
+function testMatchStatementBasics18() returns (string | int | boolean) {
+    json j = {name:"testing with json"};
+
+    match j.name {
+        string s => return s;
+        any k => return "found any";
+    }
+}
+
+function testMatchStatementBasics19() returns (string | int | boolean) {
+    json j = {name:12345};
+
+    match j.name {
+        string s => return s;
+        int i => return i;
+        any k => return "found any";
+    }
+}
+
+function testMatchStatementBasics20() returns (string | int | boolean) {
+    json j = {name:false};
+
+    match j.name {
+        string s => return s;
+        int i => return i;
+        boolean b => return b;
+        any k => return "found any";
+    }
+}
+
+function testMatchStatementBasics21() returns (string | int | boolean | float) {
+    json j = {name:10.333};
+
+    match j.name {
+        string s => return s;
+        int i => return i;
+        boolean b => return b;
+        float f => return f;
+        any k => return "found any";
+    }
+}
+
 
 
 
