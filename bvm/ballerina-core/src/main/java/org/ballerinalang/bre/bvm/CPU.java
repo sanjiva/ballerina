@@ -363,7 +363,7 @@ public class CPU {
                     i = operands[0];
                     j = operands[1];
                     if (sf.refRegs[i] == null) {
-                        handleNullRefError(ctx);
+                        sf.refRegs[j] = new BTypeDescValue(BTypes.typeNull);
                         break;
                     }
                     sf.refRegs[j] = new BTypeDescValue(sf.refRegs[i].getType());
@@ -2886,6 +2886,11 @@ public class CPU {
         }
 
         if (rhsType.getTag() == TypeTags.STREAM_TAG && lhsType.getTag() == TypeTags.STREAM_TAG) {
+            return true;
+        }
+
+        if (rhsType.getTag() == TypeTags.FUNCTION_POINTER_TAG &&
+                lhsType.getTag() == TypeTags.FUNCTION_POINTER_TAG) {
             return true;
         }
 
