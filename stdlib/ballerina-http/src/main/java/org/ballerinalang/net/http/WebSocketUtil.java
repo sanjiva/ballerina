@@ -18,6 +18,8 @@
 
 package org.ballerinalang.net.http;
 
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http.HttpHeaders;
 import org.ballerinalang.bre.Context;
 import org.ballerinalang.connector.api.Annotation;
@@ -37,6 +39,7 @@ import org.wso2.transport.http.netty.contract.websocket.HandshakeListener;
 import org.wso2.transport.http.netty.contract.websocket.WebSocketInitMessage;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.websocket.Session;
 
 
@@ -89,9 +92,12 @@ public abstract class WebSocketUtil {
         future.setHandshakeListener(new HandshakeListener() {
             @Override
             public void onSuccess(Session session) {
-                populateEndpoint(session, wsConnection);
+                BStruct serviceEndpoint = (BStruct) wsConnection.getNativeData(WebSocketConstants.WEBSOCKET_ENDPOINT);
+                populateEndpoint(session, serviceEndpoint);
                 wsConnection.addNativeData(WebSocketConstants.NATIVE_DATA_WEBSOCKET_SESSION, session);
-                WebSocketConnectionManager.getInstance().addService(session.getId(), wsService);
+                WebSocketOpenConnectionInfo connectionInfo = new WebSocketOpenConnectionInfo(wsService,
+                                                                                             serviceEndpoint);
+                WebSocketConnectionManager.getInstance().addConnection(session.getId(), connectionInfo);
 
                 Resource onOpenResource = wsService.getResourceByName(WebSocketConstants.RESOURCE_NAME_ON_OPEN);
                 if (onOpenResource == null) {
@@ -100,9 +106,9 @@ public abstract class WebSocketUtil {
                 List<ParamDetail> paramDetails =
                         onOpenResource.getParamDetails();
                 BValue[] bValues = new BValue[paramDetails.size()];
-                bValues[0] = wsService.getServiceEndpoint();
+                bValues[0] = serviceEndpoint;
                 //TODO handle BallerinaConnectorException
-                Executor.submit(onOpenResource, new WebSocketEmptyCallableUnitCallback(), null, bValues);
+                Executor.submit(onOpenResource, new WebSocketEmptyCallableUnitCallback(), null, null, bValues);
             }
 
             @Override
@@ -117,5 +123,22 @@ public abstract class WebSocketUtil {
         endpoint.setStringField(1, session.getNegotiatedSubprotocol());
         endpoint.setBooleanField(0, session.isSecure() ? 1 : 0);
         endpoint.setBooleanField(1, session.isOpen() ? 1 : 0);
+    }
+
+    public static BValue[] getWebSocketError(Context context, ChannelFuture webSocketChannelFuture, String message)
+            throws InterruptedException {
+        AtomicReference<BValue[]> error = new AtomicReference<>();
+        webSocketChannelFuture.addListener((ChannelFutureListener) future1 -> {
+            Throwable cause = future1.cause();
+            if (!future1.isSuccess() && cause != null) {
+                error.set(new BValue[]{BLangConnectorSPIUtil.createBStruct(context, HttpConstants.PROTOCOL_PACKAGE_HTTP,
+                                                                           WebSocketConstants.WEBSOCKET_CONNECTOR_ERROR,
+                                                                           message, new BValue[]{})});
+            } else {
+                error.set(new BValue[0]);
+            }
+        });
+        webSocketChannelFuture.sync();
+        return error.get();
     }
 }

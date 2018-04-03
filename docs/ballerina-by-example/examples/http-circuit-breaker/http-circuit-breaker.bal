@@ -1,4 +1,4 @@
-import ballerina/net.http;
+import ballerina/http;
 import ballerina/runtime;
 import ballerina/io;
 
@@ -12,14 +12,18 @@ endpoint http:ServiceEndpoint backendEP {
 
 endpoint http:ClientEndpoint backendClientEP {
     circuitBreaker: {
-                        failureThreshold:0.2,
-                        resetTimeout:10000,
-                        httpStatusCodes:[400, 404, 500]
-                    },
+        rollingWindow: {
+                            timeWindow:10000,
+                            bucketSize:2000
+                       },
+        failureThreshold:0.2,
+        resetTimeout:10000,
+        statusCodes:[400, 404, 500]
+    },
     targets: [
-             {
-                 uri: "http://localhost:8080"
-             }
+                 {
+                     uri: "http://localhost:8080"
+                 }
              ],
     endpointTimeout:2000
 };

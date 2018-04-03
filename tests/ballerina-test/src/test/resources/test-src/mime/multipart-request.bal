@@ -1,5 +1,4 @@
-import ballerina/net.http;
-import ballerina/net.http.mock;
+import ballerina/http;
 import ballerina/io;
 import ballerina/mime;
 
@@ -8,7 +7,7 @@ function setErrorResponse(http:Response response,  mime:EntityError err) {
     response.setStringPayload(err.message);
 }
 
-endpoint mock:NonListeningServiceEndpoint mockEP {
+endpoint http:NonListeningServiceEndpoint mockEP {
     port:9090
 };
 
@@ -34,9 +33,6 @@ service<http:Service> test bind mockEP {
                             mime:Entity entity = {};
                             entity.setText(textPayload);
                             response.setEntity(entity);
-                    }
-                    int | null => {
-                        response.setStringPayload("Text payload is null");
                     }
                 }
             }
@@ -73,17 +69,17 @@ service<http:Service> test bind mockEP {
     multipart3 (endpoint client, http:Request request) {
         http:Response response = {};
         match request.getMultiparts() {
-              mime:Entity[] bodyParts => {
-                   match bodyParts[0].getXml() {
-                        xml xmlContent => {response.setXmlPayload(xmlContent);}
-                        mime:EntityError err => {
-                            setErrorResponse(response, err);
-                        }
-                   }
-              }
-              mime:EntityError err => {
-                    setErrorResponse(response, err);
-              }
+            mime:EntityError err => {
+                setErrorResponse(response, err);
+            }
+            mime:Entity[] bodyParts => {
+               match bodyParts[0].getXml() {
+                    xml xmlContent => {response.setXmlPayload(xmlContent);}
+                    mime:EntityError err => {
+                        setErrorResponse(response, err);
+                    }
+               }
+            }
          }
          _ = client -> respond(response);
     }
@@ -95,17 +91,17 @@ service<http:Service> test bind mockEP {
     multipart4 (endpoint client, http:Request request) {
         http:Response response = {};
         match request.getMultiparts() {
-              mime:Entity[] bodyParts => {
-                match bodyParts[0].getBlob() {
-                      blob blobContent => {response.setBinaryPayload(blobContent);}
-                      mime:EntityError err => {
-                            setErrorResponse(response, err);
-                      }
+            mime:EntityError err => {
+                setErrorResponse(response, err);
+            }
+            mime:Entity[] bodyParts => {
+            match bodyParts[0].getBlob() {
+                  blob blobContent => {response.setBinaryPayload(blobContent);}
+                  mime:EntityError err => {
+                        setErrorResponse(response, err);
+                  }
                 }
-              }
-              mime:EntityError err => {
-                    setErrorResponse(response, err);
-              }
+            }
         }
         _ = client -> respond(response);
     }
@@ -178,19 +174,22 @@ service<http:Service> test bind mockEP {
 
 function handleNestedParts (mime:Entity parentPart) returns (string) {
     string content = "";
-    match parentPart.getBodyParts() {
-        mime:EntityError err => {
-            return "Error decoding nested parts";
-        }
-        mime:Entity[] bodyParts => {
+    string contentTypeOfParent = parentPart.contentType.toString();
+    if (contentTypeOfParent.hasPrefix("multipart/")) {
+        match parentPart.getBodyParts() {
+            mime:EntityError err => {
+                return "Error decoding nested parts";
+            }
+            mime:Entity[] childParts => {
             int i = 0;
-            while (i < lengthof bodyParts) {
-                mime:Entity part = bodyParts[i];
-                content = content + handleContent(part);
-                i = i + 1;
+                while (i < lengthof childParts) {
+                    mime:Entity childPart = childParts[i];
+                    content = content + handleContent(childPart);
+                    i = i + 1;
+                }
             }
         }
-     }
+    }
     return content;
 }
 
@@ -207,11 +206,7 @@ function handleContent (mime:Entity bodyPart) returns (string) {
         match payload {
             mime:EntityError err => return "Error in getting json payload";
             json jsonContent => {
-               var result = <string>jsonContent.bodyPart;
-                match result {
-                    string returnContent => return returnContent;
-                    error err => return "Error";
-                }
+               return extractFieldValue(jsonContent.bodyPart);
             }
         }
     } else if (mime:TEXT_PLAIN == contentType) {
@@ -219,11 +214,8 @@ function handleContent (mime:Entity bodyPart) returns (string) {
         match payload {
             mime:EntityError err => return "Error in getting string payload";
             string textContent => return textContent;
-            int | null => return "null payload";
         }
     } else if (mime:APPLICATION_OCTET_STREAM == contentType) {
-        //var blobContent, _ = bodyPart.getBlob();
-        //return blobContent.toString(mime:DEFAULT_CHARSET);
         var payload = bodyPart.getBlob();
         match payload {
             mime:EntityError err => return "Error in getting blob payload";
@@ -231,4 +223,15 @@ function handleContent (mime:Entity bodyPart) returns (string) {
       }
     }
     return "";
+}
+
+//Keep this until there's a simpler way to get a string value out of a json
+function extractFieldValue(json fieldValue) returns string {
+     match fieldValue {
+        int i => return "error";
+        string s => return s;
+        boolean b => return "error";
+        null  => return "error";
+        json j => return "error";
+    }
 }

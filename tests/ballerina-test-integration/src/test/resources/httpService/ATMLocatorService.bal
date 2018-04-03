@@ -1,18 +1,18 @@
 import ballerina/io;
 import ballerina/mime;
-import ballerina/net.http;
+import ballerina/http;
 
 endpoint http:ServiceEndpoint serviceEnpoint {
     port:9090
 };
 
 endpoint http:ClientEndpoint bankInfoService {
-    targets: [{uri: "http://localhost:9090/bankinfo/product"}]
+    targets:[{url: "http://localhost:9090/bankinfo/product"}]
 
 };
 
 endpoint http:ClientEndpoint branchLocatorService {
-    targets: [{uri: "http://localhost:9090/branchlocator/product"}]
+    targets:[{url: "http://localhost:9090/branchlocator/product"}]
 };
 
 @http:ServiceConfig {
@@ -30,13 +30,13 @@ service<http:Service> ATMLocator bind serviceEnpoint {
         match jsonLocatorReq {
             json zip => {
                 string zipCode;
-                zipCode =? <string>zip["ATMLocator"]["ZipCode"];
+                zipCode = extractFieldValue(zip["ATMLocator"]["ZipCode"]);
                 io:println("Zip Code " + zipCode);
                 json branchLocatorReq = {"BranchLocator":{"ZipCode":""}};
                 branchLocatorReq.BranchLocator.ZipCode = zipCode;
                 backendServiceReq.setJsonPayload(branchLocatorReq);
             }
-            mime:EntityError err => {
+            http:PayloadError err => {
                 io:println("Error occurred while reading ATM locator request");
                 return;
             }
@@ -58,13 +58,13 @@ service<http:Service> ATMLocator bind serviceEnpoint {
         match branchLocatorRes {
             json branch => {
                 string branchCode;
-                branchCode =? <string>branch.ABCBank.BranchCode;
+                branchCode = extractFieldValue(branch.ABCBank.BranchCode);
                 io:println("Branch Code " + branchCode);
                 json bankInfoReq = {"BranchInfo":{"BranchCode":""}};
                 bankInfoReq.BranchInfo.BranchCode = branchCode;
                 backendServiceReq.setJsonPayload(bankInfoReq);
             }
-            mime:EntityError err => {
+            http:PayloadError err => {
                 io:println("Error occurred while reading branch locator response");
                 return;
             }
@@ -100,7 +100,7 @@ service<http:Service> Bankinfo bind serviceEnpoint {
         match jsonRequest {
             json bankInfo => {
                 string branchCode;
-                branchCode =? <string>bankInfo.BranchInfo.BranchCode;
+                branchCode = extractFieldValue(bankInfo.BranchInfo.BranchCode);
                 json payload = {};
                 if (branchCode == "123") {
                     payload = {"ABC Bank":{"Address":"111 River Oaks Pkwy, San Jose, CA 95999"}};
@@ -110,7 +110,7 @@ service<http:Service> Bankinfo bind serviceEnpoint {
 
                 res.setJsonPayload(payload);
             }
-            mime:EntityError err => {
+            http:PayloadError err => {
                 io:println("Error occurred while reading bank info request");
                 return;
             }
@@ -135,7 +135,7 @@ service<http:Service> Banklocator bind serviceEnpoint {
         match jsonRequest {
             json bankLocator => {
                 string zipCode;
-                zipCode =? <string>bankLocator.BranchLocator.ZipCode;
+                zipCode = extractFieldValue(bankLocator.BranchLocator.ZipCode);
                 json payload = {};
                 if (zipCode == "95999") {
                     payload = {"ABCBank":{"BranchCode":"123"}};
@@ -144,12 +144,23 @@ service<http:Service> Banklocator bind serviceEnpoint {
                 }
                 res.setJsonPayload(payload);
             }
-            mime:EntityError err => {
+            http:PayloadError err => {
                 io:println("Error occurred while reading bank locator request");
                 return;
             }
         }
 
         _ = outboundEP -> respond(res);
+    }
+}
+
+//Keep this until there's a simpler way to get a string value out of a json
+function extractFieldValue(json fieldValue) returns string {
+    match fieldValue {
+        int i => return "error";
+        string s => return s;
+        boolean b => return "error";
+        null  => return "error";
+        json j => return "error";
     }
 }

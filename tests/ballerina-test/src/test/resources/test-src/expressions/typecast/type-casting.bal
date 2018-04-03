@@ -97,7 +97,7 @@ function testJsonToStringCast() returns (string) {
 
 function testJSONObjectToStringCast() returns (string | error) {
     json j = {"foo":"bar"};
-    var value =? <string>j;
+    var value = <string>j;
     //TODO : Handle error
 
     return value;
@@ -375,7 +375,7 @@ function testCompatibleStructForceCasting() returns (A | error) {
     A a = {x: "x-valueof-a", y:4};
     B b = {x: "x-valueof-b"};
 
-    b =? <B> a;
+    b = <B> a;
     A c =? <A> b;
 
     //TODO Handle error
@@ -519,7 +519,7 @@ function testErrorOnCasting() returns (string | error, int | error, float | erro
 }
 
 function testAnyToTable() returns (table | error) {
-    table < Employee> tb = {};
+    table < Employee> tb = table{};
 
     Employee e1 = {id:1, name:"Jane"};
     Employee e2 = {id:2, name:"Anne"};
