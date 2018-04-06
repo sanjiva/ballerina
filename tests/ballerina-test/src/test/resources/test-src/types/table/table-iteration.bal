@@ -49,8 +49,8 @@ function testForEachInTableWithStmt () returns (int, int, float, string) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = check testDB -> select("SELECT * from Person where id = 1", null, typeof Person);
-    table<Person> dt = dt1; //TODO:remove this
+    var temp = testDB -> select("SELECT * from Person where id = 1", (), typeof Person);
+    table<Person> dt = check temp;
 
     int id;
     int age;
@@ -78,8 +78,8 @@ function testForEachInTable () returns (int, int, float, string) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = testDB-> select("SELECT * from Person where id = 1", null, typeof Person);
-    table<Person> dt = dt1; //TODO:remove this
+    var temp = testDB-> select("SELECT * from Person where id = 1", (), typeof Person);
+    table<Person> dt = check temp;
 
     dt.foreach ((Person p) => {
                     idValue = p.id;
@@ -107,8 +107,8 @@ function testCountInTable () returns (int) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = check testDB -> select("SELECT * from Person where id < 10", null, typeof Person);
-    table<Person> dt = dt1; //TODO:remove this
+    var temp = testDB -> select("SELECT * from Person where id < 10", (), typeof Person);
+    table<Person> dt = check temp;
     int count = dt.count();
     _ = testDB -> close();
     return count;
@@ -125,8 +125,8 @@ function testFilterTable () returns (int, int, int) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = check testDB -> select("SELECT * from Person", null, typeof Person);
-    table<Person> dt = dt1; //TODO:remove this
+    var temp = testDB -> select("SELECT * from Person", (), typeof Person);
+    table<Person> dt = check temp;
     Person[] personBelow35 = dt.filter(isBellow35);
     int count = lengthof personBelow35;
     int id1 = personBelow35[0].id;
@@ -146,8 +146,8 @@ function testFilterWithAnnonymousFuncOnTable () returns (int, int, int) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = check testDB -> select("SELECT * from Person", null, typeof Person);
-    table<Person> dt = dt1; //TODO:remove this
+    var temp = testDB -> select("SELECT * from Person", (), typeof Person);
+    table<Person> dt = check temp;
     Person[] personBelow35 = dt.filter((Person p) => (boolean) {
                                            return p.age < 35;
                                        });
@@ -169,8 +169,8 @@ function testFilterTableWithCount () returns (int) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = check testDB -> select("SELECT * from Person", null, typeof Person);
-    table<Person> dt = dt1; //TODO:remove this
+    var temp = testDB -> select("SELECT * from Person", (), typeof Person);
+    table<Person> dt = check temp;
     int count = dt.filter(isBellow35).count();
     _ = testDB -> close();
     return count;
@@ -187,8 +187,8 @@ function testMapTable () returns (string[]) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = check testDB -> select("SELECT * from Person order by id", null, typeof Person);
-    table<Person> dt = dt1; //TODO:remove this
+    var temp = testDB -> select("SELECT * from Person order by id", (), typeof Person);
+    table<Person> dt = check temp;
     string[] names = dt.map(getName);
     _ = testDB -> close();
     return names;
@@ -205,8 +205,8 @@ function testMapWithFilterTable () returns (string[]) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = check testDB -> select("SELECT * from Person order by id", null, typeof Person);
-    table<Person> dt = dt1; //TODO:remove this
+    var temp = testDB -> select("SELECT * from Person order by id", (), typeof Person);
+    table<Person> dt = check temp;
     string[] names = dt.map(getName).filter(isGeraterThan4String);
     _ = testDB -> close();
     return names;
@@ -223,8 +223,8 @@ function testFilterWithMapTable () returns (string[]) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = check testDB -> select("SELECT * from Person order by id", null, typeof Person);
-    table<Person> dt = dt1; //TODO:remove this
+    var temp = testDB -> select("SELECT * from Person order by id", (), typeof Person);
+    table<Person> dt = check temp;
     string[] names = dt.filter(isGeraterThan4).map(getName);
     _ = testDB -> close();
     return names;
@@ -241,8 +241,8 @@ function testFilterWithMapAndCountTable () returns (int) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = check testDB -> select("SELECT * from Person order by id", null, typeof Person);
-    table<Person> dt = dt1; //TODO:remove this
+    var temp = testDB -> select("SELECT * from Person order by id", (), typeof Person);
+    table<Person> dt = check temp;
     int count = dt.filter(isGeraterThan4).map(getName).count();
     _ = testDB -> close();
     return count;
@@ -259,8 +259,8 @@ function testAverageWithTable () returns (float) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = check testDB -> select("SELECT * from Person order by id", null, typeof Person);
-    table<Person> dt = dt1; //TODO:remove this
+    var temp = testDB -> select("SELECT * from Person order by id", (), typeof Person);
+    table<Person> dt = check temp;
     float avgSal = dt.map(getSalary).average();
     _ = testDB -> close();
     return avgSal;
@@ -277,8 +277,8 @@ function testMinWithTable () returns (float) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = check testDB -> select("SELECT * from Person order by id", null, typeof Person);
-    table<Person> dt = dt1; //TODO:remove this
+    var temp = testDB -> select("SELECT * from Person order by id", (), typeof Person);
+    table<Person> dt = check temp;
     float avgSal = dt.map(getSalary).min();
     _= testDB -> close();
     return avgSal;
@@ -295,8 +295,8 @@ function testMaxWithTable () returns (float) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = check testDB -> select("SELECT * from Person order by id", null, typeof Person);
-    table<Person> dt = dt1; //TODO:remove this
+    var temp = testDB -> select("SELECT * from Person order by id", (), typeof Person);
+    table<Person> dt = check temp;
     float avgSal = dt.map(getSalary).max();
     _ =testDB -> close();
     return avgSal;
@@ -313,8 +313,8 @@ function testSumWithTable () returns (float) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = check testDB -> select("SELECT * from Person order by id", null, typeof Person);
-    table<Person> dt = dt1; //TODO:remove this
+    var temp = testDB -> select("SELECT * from Person order by id", (), typeof Person);
+    table<Person> dt = check temp;
     float avgSal = dt.map(getSalary).sum();
     _ = testDB -> close();
     return avgSal;
@@ -331,9 +331,9 @@ function testCloseConnectionPool () returns (int) {
         options: {maximumPoolSize:1}
     };
 
-    table dt1 = check testDB -> select("SELECT COUNT(*) as countVal FROM INFORMATION_SCHEMA.SYSTEM_SESSIONS", null,
+    var temp = testDB -> select("SELECT COUNT(*) as countVal FROM INFORMATION_SCHEMA.SYSTEM_SESSIONS", (),
                               typeof ResultCount);
-    table<Person> dt = dt1; //TODO:remove this
+    table<Person> dt = check temp;
     int count;
     while (dt.hasNext()) {
         var rs = check <ResultCount> dt.getNext();
