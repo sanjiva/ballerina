@@ -22,7 +22,7 @@ endpoint http:Listener participant1EP {
 };
 
 endpoint http:Client participant2EP {
-    targets:[{url: "http://localhost:8890"}]
+    url: "http://localhost:8890"
 };
 
 State state = new();
@@ -96,7 +96,7 @@ service<http:Service> participant1 bind participant1EP {
     member (endpoint conn, http:Request req) {
 
         http:Request newReq = new;
-        newReq.setHeader("participant-id", req.getHeader("X-XID"));
+        newReq.setHeader("participant-id", req.getHeader("x-b7a-xid"));
         transaction {
             var forwardResult = participant2EP -> forward("/task1", req);
             match forwardResult {
@@ -215,7 +215,7 @@ type State object {
     function toString() returns string {
         return io:sprintf("abortedByParticipant=%b,abortedFunctionCalled=%b,committedFunctionCalled=%s," +
                             "localParticipantAbortedFunctionCalled=%s,localParticipantCommittedFunctionCalled=%s",
-                            [abortedByParticipant, abortedFunctionCalled, committedFunctionCalled,
-                            localParticipantAbortedFunctionCalled, localParticipantCommittedFunctionCalled]);
+                            abortedByParticipant, abortedFunctionCalled, committedFunctionCalled,
+                            localParticipantAbortedFunctionCalled, localParticipantCommittedFunctionCalled);
     }
 };

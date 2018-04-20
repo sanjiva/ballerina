@@ -16,8 +16,8 @@
 
 import ballerina/http;
 import ballerina/io;
-import ballerina/util;
 import ballerina/sql;
+import ballerina/system;
 
 endpoint http:Listener participant2EP {
     port:8890
@@ -66,7 +66,7 @@ service<http:Service> participant2 bind participant2EP {
         http:Response res = new;
         string result = "incorrect id";
         transaction {
-            if (req.getHeader("X-XID") == req.getHeader("participant-id")) {
+            if (req.getHeader("x-b7a-xid") == req.getHeader("participant-id")) {
                 result = "equal id";
             }
         }
@@ -94,9 +94,8 @@ service<http:Service> participant2 bind participant2EP {
     }
     checkCustomerExists(endpoint ep, http:Request req, string uuid) {
         http:Response res = new;  res.statusCode = 200;
-        sql:Parameter para1 = {sqlType:sql:TYPE_VARCHAR, value:uuid};
-        sql:Parameter[] params = [para1];
-        var x = testDB -> select("SELECT registrationID FROM Customers WHERE registrationID = ?", params, Registration);
+        sql:Parameter para1 = (sql:TYPE_VARCHAR, uuid);
+        var x = testDB -> select("SELECT registrationID FROM Customers WHERE registrationID = ?", Registration, para1);
         match x {
             table dt => {
                string payload;
@@ -126,10 +125,10 @@ function saveToDatabase(http:Listener conn, http:Request req, boolean shouldAbor
     transaction with oncommit=onCommit, onabort=onAbort {
         transaction with oncommit=onLocalParticipantCommit, onabort=onLocalParticipantAbort {
         }
-        string uuid = util:uuid();
+        string uuid = system:uuid();
 
         var result = testDB -> update("Insert into Customers (firstName,lastName,registrationID,creditLimit,country)
-                                                 values ('John', 'Doe', '" + uuid +"', 5000.75, 'USA')", ());
+                                                 values ('John', 'Doe', '" + uuid +"', 5000.75, 'USA')");
         match result {
             int insertCount => io:println(insertCount);
             error => io:println("");
@@ -183,7 +182,7 @@ type State object {
     function toString() returns string {
         return io:sprintf("abortedFunctionCalled=%b,committedFunctionCalled=%s," +
                             "localParticipantCommittedFunctionCalled=%s,localParticipantAbortedFunctionCalled=%s",
-                            [abortedFunctionCalled, committedFunctionCalled,
-                                localParticipantCommittedFunctionCalled, localParticipantAbortedFunctionCalled]);
+                            abortedFunctionCalled, committedFunctionCalled,
+                                localParticipantCommittedFunctionCalled, localParticipantAbortedFunctionCalled);
     }
 };

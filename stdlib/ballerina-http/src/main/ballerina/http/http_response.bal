@@ -1,8 +1,9 @@
-package ballerina.http;
 
 import ballerina/file;
 import ballerina/io;
 import ballerina/mime;
+import ballerina/crypto;
+import ballerina/time;
 
 @Description { value:"Represents an HTTP response message"}
 @Field {value:"statusCode: The response status code"}
@@ -14,7 +15,7 @@ public type Response object {
         int statusCode;
         string reasonPhrase;
         string server;
-        ResponseCacheControl cacheControl;
+        ResponseCacheControl? cacheControl;
     }
 
     private {
@@ -78,7 +79,7 @@ public type Response object {
     public function removeAllHeaders ();
 
     @Description {value:"Get all transport header names from the response."}
-    @Param {value:"res: The response message"}
+    @Return {value:"An array of all transport header names"}
     public function getHeaderNames () returns (string[]);
 
     @Description {value:"Set the content-type header to response"}
@@ -120,6 +121,13 @@ public type Response object {
     @Return {value:"Returns the body parts as an array of entities"}
     public function getBodyParts () returns (mime:Entity[] | mime:EntityError);
 
+    @Description {value:"Sets the ETag header for the given payload. The ETag is generated using a CRC32 hash function."}
+    @Param {value:"The payload for which the ETag should be set."}
+    public function setETag(json|xml|string|blob payload);
+
+    @Description {value:"Sets the current time as the Last-Modified header."}
+    public function setLastModified();
+
     @Description {value:"Sets a JSON as the outbound response payload"}
     @Param {value:"response: The response message"}
     @Param {value:"payload: The JSON payload object"}
@@ -150,7 +158,7 @@ public type Response object {
     @Param {value:"response: The response message"}
     @Param {value:"filePath: Path to the file that needs to be set to the payload"}
     @Param {value:"contentType: Content-Type of the file"}
-    public function setFileAsPayload (file:Path filePath, string contentType);
+    public function setFileAsPayload (string filePath, string contentType);
 
     @Description {value:"Sets a byte channel as the outbound response payload"}
     @Param {value:"response: The response message"}
@@ -286,6 +294,17 @@ public function Response::getBodyParts () returns mime:Entity[] | mime:EntityErr
     }
 }
 
+public function Response::setETag(json|xml|string|blob payload) {
+    string etag = crypto:getCRC32(payload);
+    self.setHeader(ETAG, etag);
+}
+
+public function Response::setLastModified() {
+    time:Time currentT = time:currentTime();
+    string lastModified = currentT.format(time:TIME_FORMAT_RFC_1123);
+    self.setHeader(LAST_MODIFIED, lastModified);
+}
+
 public function Response::setJsonPayload (json payload) {
     mime:Entity entity = self.getEntityWithoutBody();
     entity.setJson(payload);
@@ -325,7 +344,7 @@ public function Response::setBodyParts (mime:Entity[] bodyParts, @sensitive stri
     self.setEntity(entity);
 }
 
-public function Response::setFileAsPayload (file:Path filePath, @sensitive string contentType) {
+public function Response::setFileAsPayload (string filePath, @sensitive string contentType) {
     mime:MediaType mediaType = mime:getMediaType(contentType);
     mime:Entity entity = self.getEntityWithoutBody();
     entity.contentType = mediaType;

@@ -30,7 +30,7 @@ service<http:Service> CustomerMgtService bind serviceEndpoint {
 }
 
 endpoint http:Client productsService {
-    targets:[{url: "http://localhost:9090"}]
+    url: "http://localhost:9090"
 };
 
 @http:ServiceConfig {
@@ -43,9 +43,9 @@ service<http:Service> Ecommerce bind serviceEndpoint {
         path:"/products/{prodId}"
     }
     productsInfo (endpoint outboundEP, http:Request req, string prodId) {
-        string reqPath = "/productsservice/" + prodId;
+        string reqPath = "/productsservice/" + untaint prodId;
         http:Request clientRequest = new;
-        var clientResponse = productsService -> get(reqPath, clientRequest);
+        var clientResponse = productsService -> get(untaint reqPath, clientRequest);
 
         match clientResponse {
             http:HttpConnectorError err => {

@@ -49,28 +49,56 @@ import javax.sql.XADataSource;
 public class SQLDatasource implements BValue {
 
     private HikariDataSource hikariDataSource;
+    private String peerAddress;
     private String databaseName;
+    private String databaseProductName;
     private String connectorId;
     private boolean xaConn;
-
-    public String getDatabaseName() {
-        return databaseName;
-    }
 
     public SQLDatasource() {}
 
     public boolean init(Struct options, String url, String dbType, String hostOrPath, int port, String username,
-            String password, String dbName) {
-        buildDataSource(options, url, dbType, hostOrPath, dbName, port, username, password);
+            String password, String dbName, String dbOptions) {
+        databaseName = dbName;
+        peerAddress = url;
+        buildDataSource(options, url, dbType, hostOrPath, dbName, port, username, password, dbOptions);
         connectorId = UUID.randomUUID().toString();
         xaConn = isXADataSource();
         try (Connection con = getSQLConnection()) {
-            databaseName = con.getMetaData().getDatabaseProductName().toLowerCase(Locale.ENGLISH);
+            databaseProductName = con.getMetaData().getDatabaseProductName().toLowerCase(Locale.ENGLISH);
         } catch (SQLException e) {
             throw new BallerinaException("error in get connection: " + Constants.CONNECTOR_NAME + ": " + e.getMessage(),
                     e);
         }
         return true;
+    }
+
+    /**
+     * Get the peer address of this datasource. If URL is used, the peer address is the URL. Otherwise, the peer address
+     * is "host:port"
+     *
+     * @return The peer address for this datasource.
+     */
+    public String getPeerAddress() {
+        return peerAddress;
+    }
+
+    /**
+     * Get the database name.
+     *
+     * @return The database name, or null if the URL is used.
+     */
+    public String getDatabaseName() {
+        return databaseName;
+    }
+
+    /**
+     * Get the database product name.
+     *
+     * @return The database product name.
+     */
+    public String getDatabaseProductName() {
+        return databaseProductName;
     }
 
     public Connection getSQLConnection() {
@@ -105,7 +133,7 @@ public class SQLDatasource implements BValue {
     }
 
     private void buildDataSource(Struct options, String url, String dbType, String hostOrPath, String dbName, int port,
-            String username, String password) {
+            String username, String password, String dbOptions) {
         try {
             HikariConfig config = new HikariConfig();
             //Set username password
@@ -114,7 +142,7 @@ public class SQLDatasource implements BValue {
             //Set URL
             String jdbcurl;
             if (url.isEmpty()) {
-                jdbcurl = constructJDBCURL(dbType, hostOrPath, port, dbName, username, password);
+                jdbcurl = constructJDBCURL(dbType, hostOrPath, port, dbName, username, password, dbOptions);
             } else {
                 jdbcurl = Constants.SQL_JDBC_PREFIX + url;
             }
@@ -228,7 +256,7 @@ public class SQLDatasource implements BValue {
     }
 
     private String constructJDBCURL(String dbType, String hostOrPath, int port, String dbName, String username,
-            String password) {
+            String password, String dbOptions) {
         StringBuilder jdbcUrl = new StringBuilder();
         dbType = dbType.toUpperCase(Locale.ENGLISH);
         hostOrPath = hostOrPath.replaceAll("/$", "");
@@ -305,7 +333,9 @@ public class SQLDatasource implements BValue {
         default:
             throw new BallerinaException("cannot generate url for unknown database type : " + dbType);
         }
-        return jdbcUrl.toString();
+        // Set peer address
+        peerAddress = hostOrPath + ":" + port;
+        return dbOptions.isEmpty() ? jdbcUrl.toString() : jdbcUrl.append(dbOptions).toString();
     }
 
     private String getXADatasourceClassName(String dbType, String url, String userName, String password) {

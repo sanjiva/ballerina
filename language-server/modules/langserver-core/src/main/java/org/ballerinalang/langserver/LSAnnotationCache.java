@@ -15,10 +15,16 @@
  */
 package org.ballerinalang.langserver;
 
+import org.ballerinalang.langserver.compiler.LSContextManager;
+import org.ballerinalang.langserver.compiler.LSPackageCache;
+import org.ballerinalang.langserver.compiler.LSPackageLoader;
 import org.ballerinalang.model.AttachmentPoint;
 import org.ballerinalang.model.elements.PackageID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.wso2.ballerinalang.compiler.tree.BLangAnnotation;
 import org.wso2.ballerinalang.compiler.tree.BLangPackage;
+import org.wso2.ballerinalang.compiler.util.CompilerContext;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,7 +41,9 @@ import java.util.stream.Collectors;
  * @since 0.970.0
  */
 public class LSAnnotationCache {
-    
+
+    private static final Logger logger = LoggerFactory.getLogger(LSPackageCache.class);
+
     private final HashMap<PackageID, List<BLangAnnotation>> serviceAnnotations = new HashMap<>();
     private HashMap<PackageID, List<BLangAnnotation>> resourceAnnotations = new HashMap<>();
     private HashMap<PackageID, List<BLangAnnotation>> functionAnnotations = new HashMap<>();
@@ -51,11 +59,28 @@ public class LSAnnotationCache {
     public static synchronized void initiate() {
         if (lsAnnotationCache == null) {
             lsAnnotationCache = new LSAnnotationCache();
-            List<BLangPackage> builtins = LSPackageLoader.getBuiltinPackages();
-            Map<String, BLangPackage> packages = LSPackageCache.getStaticPackageMap();
-            builtins.forEach(bLangPackage -> packages.put(bLangPackage.packageID.getName().getValue(), bLangPackage));
+            CompilerContext context = LSContextManager.getInstance().getBuiltInPackagesCompilerContext();
+            Map<String, BLangPackage> packages = loadPackagesMap(context);
             lsAnnotationCache.loadAnnotations(packages.values().stream().collect(Collectors.toList()));
         }
+    }
+
+    private static Map<String, BLangPackage> loadPackagesMap(CompilerContext tempCompilerContext) {
+        Map<String, BLangPackage> staticPackages = new HashMap<>();
+        for (String staticPkgName : LSPackageLoader.getStaticPkgNames()) {
+            PackageID packageID = new PackageID(new org.wso2.ballerinalang.compiler.util.Name("ballerina"),
+                    new org.wso2.ballerinalang.compiler.util.Name(staticPkgName),
+                    new org.wso2.ballerinalang.compiler.util.Name("0.0.0"));
+            try {
+                // We will wrap this with a try catch to prevent LS crashing due to compiler errors.
+                BLangPackage bLangPackage = LSPackageLoader.getPackageById(tempCompilerContext, packageID);
+                staticPackages.put(bLangPackage.packageID.bvmAlias(), bLangPackage);
+            } catch (Exception e) {
+                logger.warn("Error while loading package :" + staticPkgName);
+            }
+        }
+
+        return staticPackages;
     }
     
     private void loadAnnotations(List<BLangPackage> packageList) {

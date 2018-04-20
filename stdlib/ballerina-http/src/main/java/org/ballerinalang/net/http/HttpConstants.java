@@ -206,7 +206,7 @@ public class HttpConstants {
     public static final int RESPONSE_STATUS_CODE_INDEX = 0;
     public static final int RESPONSE_REASON_PHRASE_INDEX = 0;
     public static final int RESPONSE_SERVER_INDEX = 1;
-    public static final int IN_RESPONSE_CACHE_CONTROL_INDEX = 0;
+    public static final int RESPONSE_CACHE_CONTROL_INDEX = 0;
     public static final int IN_RESPONSE_RECEIVED_TIME_INDEX = 1;
 
     //PushPromise struct indexes
@@ -258,8 +258,8 @@ public class HttpConstants {
 
     //Response codes
     public static final String HTTP_BAD_REQUEST = "400";
-    public static final String HEADER_X_XID = "X-XID";
-    public static final String HEADER_X_REGISTER_AT_URL = "X-Register-At-URL";
+    public static final String HEADER_X_XID = "x-b7a-xid";
+    public static final String HEADER_X_REGISTER_AT_URL = "x-b7a-register-at";
 
 
     public static final String HTTP_SERVER_CONNECTOR = "HTTP_SERVER_CONNECTOR";
@@ -286,7 +286,7 @@ public class HttpConstants {
     public static final String ENDPOINT_CONFIG_SECURE_SOCKET = "secureSocket";
 
     public static final String ENDPOINT_CONFIG_TRUST_STORE = "trustStore";
-    public static final String FILE_PATH = "filePath";
+    public static final String FILE_PATH = "path";
     public static final String PASSWORD = "password";
     public static final String PROTOCOL_VERSION = "name";
     public static final String ENABLED_PROTOCOLS = "versions";
@@ -324,6 +324,8 @@ public class HttpConstants {
     public static final String CONNECTION_THROTTLING_STRUCT_REFERENCE = "connectionThrottling";
     public static final String CONNECTION_THROTTLING_MAX_ACTIVE_CONNECTIONS = "maxActiveConnections";
     public static final String CONNECTION_THROTTLING_WAIT_TIME = "waitTime";
+    public static final String CONNECTION_THROTTLING_MAX_ACTIVE_STREAMS_PER_CONNECTION =
+            "maxActiveStreamsPerConnection";
 
     //FollowRedirect Indexes
     public static final String FOLLOW_REDIRECT_STRUCT_REFERENCE = "followRedirects";
@@ -331,7 +333,7 @@ public class HttpConstants {
     public static final String FOLLOW_REDIRECT_MAXCOUNT = "maxCount";
 
     //Proxy Indexed
-    public static final String PROXY_STRUCT_REFERENCE = "proxyConfig";
+    public static final String PROXY_STRUCT_REFERENCE = "proxy";
     public static final String PROXY_HOST = "host";
     public static final String PROXY_PORT = "port";
     public static final String PROXY_USERNAME = "userName";
@@ -341,6 +343,7 @@ public class HttpConstants {
     // Filter related
     public static final String ENDPOINT_CONFIG_FILTERS = "filters";
     public static final String FILTERS = "FILTERS";
+    public static final String HTTP_REQUEST_FILTER_FUNCTION_NAME = "filterRequest";
 
     // Retry Config
     public static final String CLIENT_EP_RETRY = "retry";

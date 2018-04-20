@@ -14,7 +14,7 @@ function forkJoinWithTimeoutTest1() returns map {
 	     int b = 15;
 	     a <- w1;
 	     b -> w1;
-	     runtime:sleepCurrentWorker(5000);
+	     runtime:sleep(5000);
 	   }
     } join (all) (map results) { m["x"] = 25; } timeout (1) (map results) { m["x"] = 15; }
     return m;
@@ -30,7 +30,7 @@ function forkJoinWithTimeoutTest2() returns map {
 	   worker w2 {
 	     int a = 0;
 	     int b = 15;
-	     runtime:sleepCurrentWorker(100);
+	     runtime:sleep(100);
 	   }
     } join (all) (map results) { m["x"] = 25; } timeout (5) (map results) { m["x"] = 15; }
     return m;
@@ -97,13 +97,13 @@ function forkJoinWithSomeSelectedJoin1() returns int {
 	   worker w2 {
 	     int a = 5;
 	     int b = 15;
-	     runtime:sleepCurrentWorker(2000);
+	     runtime:sleep(2000);
 	     m["x"] = a;
 	   }
 	   worker w3 {
 	     int a = 0;
 	     int b = 15;
-         runtime:sleepCurrentWorker(1000);
+         runtime:sleep(1000);
 	     m["x"] = b;
 	   }
 	} join (some 1 w2, w3) (map results) {  }
@@ -160,7 +160,7 @@ function forkJoinWithSomeSelectedJoin3() returns map {
 	     a <- w1;
 	     m["x"] = a;
 	     (a * 2) -> w3;
-	     runtime:sleepCurrentWorker(1000);
+	     runtime:sleep(1000);
 	   }
 	   worker w3 {
 	     int a = 0;
@@ -188,7 +188,7 @@ function forkJoinWithSomeSelectedJoin4() returns int {
 	   worker w3 {
 	     int a = 0;
 	     a <- w2;
-	     runtime:sleepCurrentWorker(1000);
+	     runtime:sleep(1000);
 	     m["x"] = a * 2;
 	   }
 	} join (some 2 w1, w2, w3) (map results) {  }
@@ -213,7 +213,7 @@ function forkJoinWithSomeSelectedJoin5() returns int {
 	   worker w3 {
 	     int a = 0;
 	     a <- w2;
-	     runtime:sleepCurrentWorker(5000);
+	     runtime:sleep(5000);
 	     m["x"] = a * 2;
 	     a -> w2;
 	   }
@@ -241,7 +241,7 @@ function forkJoinWithAllSelectedJoin1() returns map {
 	     a <- w1;
 	     m["x"] = a;
 	     (a * 2) -> w3;
-	     runtime:sleepCurrentWorker(1000);
+	     runtime:sleep(1000);
 	     m["x"] = 33;
 	   }
 	   worker w3 {
@@ -271,7 +271,7 @@ function forkJoinWithAllSelectedJoin2() returns int {
 	     a <- w1;
 	     result = a;
 	     (a * 2) -> w3;
-	     runtime:sleepCurrentWorker(2000);
+	     runtime:sleep(2000);
 	     result = 33;
 	   }
 	   worker w3 {
@@ -306,20 +306,8 @@ function forkJoinWithMessagePassingTimeoutNotTriggered() returns map {
          a -> fork;
        }
     } join (all) (map results) {
-        int b;
-        error e = {};
-		var result = <any[]> results["w1"];
-		any[] anyArray;
-		match result{
-			any[] arr => {
-				anyArray = arr;
-                b = check <int> arr[0];
-			}
-    		error err => e = err;
-		}
-        int a;
-        anyArray = check <any[]> results["w2"];
-        a = check <int> anyArray[0];
+        int b = check <int> results["w1"];
+        int a = check <int> results["w2"];
         m["x"] = (a + 1) * b;
     } timeout (5) (map results) { 
         m["x"] = 15; 
@@ -438,11 +426,9 @@ function forkJoinWithStruct () returns string {
             f -> fork;
         }
     } join (all) (map results) {
-        var resW1 = check <any[]> results["w1"];
-        var f = check <foo> resW1[0];
+        var f = check <foo> results["w1"];
         result = "[join-block] sW1: " + f.y;
-        var resW2 = check <any[]> results["w2"];
-        var fW2 = check <float> resW2[0];
+        var fW2 = check <float> results["w2"];
         result = result + "[join-block] fW2: " + fW2;
     }
     return result;
@@ -451,7 +437,7 @@ function forkJoinWithStruct () returns string {
 type foo {
     int x;
     string y;
-}
+};
 
 function forkJoinWithSameWorkerContent () returns string {
     string result;
@@ -477,12 +463,12 @@ function forkJoinWithSameWorkerContent () returns string {
             a -> fork;
         }
     } join (all) (map results) {
-        var resW1 = check <any[]> results["w1"];
-        var s1 = check <string[]> resW1[0];
-        result = "W1: " + s1[0];
-        var resW2 = check <any[]> results["w2"];
-        var s2 = check <string[]> resW2[0];
-        result = result + ", W2: " + s2[0];
+        string[] resW1 = check <string[]> results["w1"];
+        var s1 = resW1[0];
+        result = "W1: " + s1;
+        string[] resW2 = check <string[]> results["w2"];
+        var s2 = resW2[0];
+        result = result + ", W2: " + s2;
     }
     return result;
 }

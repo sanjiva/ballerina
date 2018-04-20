@@ -14,7 +14,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-package ballerina.http;
 
 import ballerina/log;
 import ballerina/runtime;
@@ -76,7 +75,7 @@ public type HttpCachingClient object {
     }
 
     public new(serviceUri, config, cacheConfig) {
-        self.httpClient = createHttpClient(serviceUri, config);
+        self.httpClient = createHttpSecureClient(serviceUri, config);
         self.cache = createHttpCache("http-cache", cacheConfig);
     }
 
@@ -183,11 +182,13 @@ public type HttpCachingClient object {
 @Description {value:"Creates an HTTP client capable of caching HTTP responses."}
 public function createHttpCachingClient(string url, ClientEndpointConfig config, CacheConfig cacheConfig) returns HttpClient {
     HttpCachingClient httpCachingClient = new (url, config, cacheConfig);
-    log:printDebug("Created HTTP caching client: " + io:sprintf("%r",[httpCachingClient]));
+    log:printDebug("Created HTTP caching client: " + io:sprintf("%r", httpCachingClient));
     return httpCachingClient;
 }
 
 public function HttpCachingClient::post (string path, Request req) returns (Response|HttpConnectorError) {
+    setRequestCacheControlHeader(req);
+
     match self.httpClient.post(path, req) {
         Response inboundResponse => {
             invalidateResponses(self.cache, inboundResponse, path);
@@ -199,10 +200,13 @@ public function HttpCachingClient::post (string path, Request req) returns (Resp
 }
 
 public function HttpCachingClient::head (string path, Request req) returns (Response|HttpConnectorError) {
+    setRequestCacheControlHeader(req);
     return getCachedResponse(self.cache, self.httpClient, req, HEAD, path, self.cacheConfig.isShared);
 }
 
 public function HttpCachingClient::put (string path, Request req) returns (Response|HttpConnectorError) {
+    setRequestCacheControlHeader(req);
+
     match self.httpClient.put(path, req) {
         Response inboundResponse => {
             invalidateResponses(self.cache, inboundResponse, path);
@@ -214,6 +218,8 @@ public function HttpCachingClient::put (string path, Request req) returns (Respo
 }
 
 public function HttpCachingClient::execute (string httpMethod, string path, Request req) returns (Response|HttpConnectorError) {
+    setRequestCacheControlHeader(req);
+
     if (httpMethod == GET || httpMethod == HEAD) {
         return getCachedResponse(self.cache, self.httpClient, req, httpMethod, path, self.cacheConfig.isShared);
     }
@@ -229,6 +235,8 @@ public function HttpCachingClient::execute (string httpMethod, string path, Requ
 }
 
 public function HttpCachingClient::patch (string path, Request req) returns (Response|HttpConnectorError) {
+    setRequestCacheControlHeader(req);
+
     match self.httpClient.patch(path, req) {
         Response inboundResponse => {
             invalidateResponses(self.cache, inboundResponse, path);
@@ -240,6 +248,8 @@ public function HttpCachingClient::patch (string path, Request req) returns (Res
 }
 
 public function HttpCachingClient::delete (string path, Request req) returns (Response|HttpConnectorError) {
+    setRequestCacheControlHeader(req);
+
     match self.httpClient.delete(path, req) {
         Response inboundResponse => {
             invalidateResponses(self.cache, inboundResponse, path);
@@ -251,10 +261,13 @@ public function HttpCachingClient::delete (string path, Request req) returns (Re
 }
 
 public function HttpCachingClient::get (string path, Request req) returns (Response|HttpConnectorError) {
+    setRequestCacheControlHeader(req);
     return getCachedResponse(self.cache, self.httpClient, req, GET, path, self.cacheConfig.isShared);
 }
 
 public function HttpCachingClient::options (string path, Request req) returns (Response|HttpConnectorError) {
+    setRequestCacheControlHeader(req);
+
     match self.httpClient.options(path, req) {
         Response inboundResponse => {
             invalidateResponses(self.cache, inboundResponse, path);
@@ -317,9 +330,9 @@ function getCachedResponse (HttpCache cache, HttpClient httpClient, Request req,
         if (isFreshResponse(cachedResponse, isShared)) {
             // If the no-cache directive is not set, responses can be served straight from the cache, without
             // validating with the origin server.
-            if (!req.cacheControl.noCache && !cachedResponse.cacheControl.noCache && !req.hasHeader(PRAGMA)) {
+            if (!(req.cacheControl.noCache ?: true) && !(cachedResponse.cacheControl.noCache ?: true) && !req.hasHeader(PRAGMA)) {
                 setAgeHeader(cachedResponse);
-                log:printDebug("Serving a cached fresh response without validating with the origin server: " + io:sprintf("%r", [cachedResponse]));
+                log:printDebug("Serving a cached fresh response without validating with the origin server: " + io:sprintf("%r", cachedResponse));
                 return cachedResponse;
             } else {
                 log:printDebug("Serving a cached fresh response after validating with the origin server");
@@ -333,7 +346,7 @@ function getCachedResponse (HttpCache cache, HttpClient httpClient, Request req,
 
             // If the no-cache directive is not set, responses can be served straight from the cache, without
             // validating with the origin server.
-            if (!req.cacheControl.noCache && !cachedResponse.cacheControl.noCache
+            if (!(req.cacheControl.noCache ?: true) && ! (cachedResponse.cacheControl.noCache ?: true)
                                               && !req.hasHeader(PRAGMA)) {
                 log:printDebug("Serving cached stale response without validating with the origin server");
                 setAgeHeader(cachedResponse);
@@ -409,7 +422,10 @@ function getValidationResponse (HttpClient httpClient, Request req, Response cac
     } else {
         // Forward the received response and replace the stored responses
         validationResponse.requestTime = currentT.time;
-        cache.put(getCacheKey(httpMethod, path), req.cacheControl, validationResponse);
+        match req.cacheControl {
+            RequestCacheControl reqCC => cache.put(getCacheKey(httpMethod, path), reqCC, validationResponse);
+            () => {}
+        }
         log:printDebug("Received a full response. Storing it in cache and forwarding to the client");
         return validationResponse;
     }
@@ -467,12 +483,19 @@ function invalidateResponses (HttpCache httpCache, Response inboundResponse, str
 // Based on https://tools.ietf.org/html/rfc7234#section-4.2.1
 function getFreshnessLifetime (Response cachedResponse, boolean isSharedCache) returns int {
     // TODO: Ensure that duplicate directives are not counted towards freshness lifetime.
-    if (isSharedCache && cachedResponse.cacheControl.sMaxAge >= 0) {
-        return cachedResponse.cacheControl.sMaxAge;
-    }
+    match cachedResponse.cacheControl {
+        ResponseCacheControl respCC => {
+            if (isSharedCache && respCC.sMaxAge >= 0) {
+                return respCC.sMaxAge;
+            }
 
-    if (cachedResponse.cacheControl.maxAge >= 0) {
-        return cachedResponse.cacheControl.maxAge;
+            if (respCC.maxAge >= 0) {
+                return respCC.maxAge;
+            }
+        }
+
+
+        () => {}
     }
 
     // At this point, there should be exactly one Expires header to calculate the freshness lifetime.
@@ -486,8 +509,8 @@ function getFreshnessLifetime (Response cachedResponse, boolean isSharedCache) r
 
                 if (lengthof dateHeader == 1) {
                     // TODO: See if time parsing errors need to be handled
-                    int freshnessLifetime = (time:parseTo(expiresHeader[0], time:TIME_FORMAT_RFC_1123).time
-                                             - time:parseTo(dateHeader[0], time:TIME_FORMAT_RFC_1123).time) / 1000;
+                    int freshnessLifetime = (time:parse(expiresHeader[0], time:TIME_FORMAT_RFC_1123).time
+                                             - time:parse(dateHeader[0], time:TIME_FORMAT_RFC_1123).time) / 1000;
                     return freshnessLifetime;
                 }
             }
@@ -506,31 +529,38 @@ function isFreshResponse (Response cachedResponse, boolean isSharedCache) return
 }
 
 // Based on https://tools.ietf.org/html/rfc7234#section-4.2.4
-function isAllowedToBeServedStale (RequestCacheControl requestCacheControl, Response cachedResponse,
+function isAllowedToBeServedStale (RequestCacheControl? requestCacheControl, Response cachedResponse,
                                    boolean isSharedCache) returns boolean {
     // A cache MUST NOT generate a stale response if it is prohibited by an explicit in-protocol directive
-    if (isServingStaleProhibited(requestCacheControl, cachedResponse.cacheControl)) {
-        return false;
+    match cachedResponse.cacheControl {
+        ResponseCacheControl respCC => {
+            if (isServingStaleProhibited(requestCacheControl, respCC)) {
+                return false;
+            }
+        }
+
+        () => return false;
     }
+
     return isStaleResponseAccepted(requestCacheControl, cachedResponse, isSharedCache);
 }
 
 // Based on https://tools.ietf.org/html/rfc7234#section-4.2.4
-function isServingStaleProhibited (RequestCacheControl requestCacheControl,
-                                   ResponseCacheControl responseCacheControl) returns boolean {
+function isServingStaleProhibited (RequestCacheControl? requestCacheControl,
+                                   ResponseCacheControl? responseCacheControl) returns boolean {
     // A cache MUST NOT generate a stale response if it is prohibited by an explicit in-protocol directive
-    return requestCacheControl.noStore ||
-           requestCacheControl.noCache ||
-           responseCacheControl.mustRevalidate ||
-           responseCacheControl.proxyRevalidate ||
-           (responseCacheControl.sMaxAge >= 0);
+    return (requestCacheControl.noStore ?: false) ||
+            (requestCacheControl.noCache ?: false) ||
+            (responseCacheControl.mustRevalidate ?: false)||
+            (responseCacheControl.proxyRevalidate ?: false) ||
+            ((responseCacheControl.sMaxAge ?: -1) >= 0);
 }
 
 // Based on https://tools.ietf.org/html/rfc7234#section-4.2.4
-function isStaleResponseAccepted (RequestCacheControl requestCacheControl, Response cachedResponse, boolean isSharedCache) returns boolean {
-    if (requestCacheControl.maxStale == MAX_STALE_ANY_AGE) {
+function isStaleResponseAccepted (RequestCacheControl? requestCacheControl, Response cachedResponse, boolean isSharedCache) returns boolean {
+    if ((requestCacheControl.maxStale ?: -1) == MAX_STALE_ANY_AGE) {
         return true;
-    } else if (requestCacheControl.maxStale >=
+    } else if ((requestCacheControl.maxStale ?: -1) >=
                (getResponseAge(cachedResponse) - getFreshnessLifetime(cachedResponse, isSharedCache))) {
         return true;
     }
@@ -664,13 +694,13 @@ function getDateValue (Response inboundResponse) returns int {
     if (!inboundResponse.hasHeader(DATE)) {
         log:printDebug("Date header not found. Using current time for the Date header.");
         time:Time currentT = time:currentTime();
-        inboundResponse.setHeader(DATE, currentT.formatTo(time:TIME_FORMAT_RFC_1123));
+        inboundResponse.setHeader(DATE, currentT.format(time:TIME_FORMAT_RFC_1123));
         return currentT.time;
     }
 
     string dateHeader = inboundResponse.getHeader(DATE);
     // TODO: May need to handle invalid date headers
-    time:Time dateHeaderTime = time:parseTo(dateHeader, time:TIME_FORMAT_RFC_1123);
+    time:Time dateHeaderTime = time:parse(dateHeader, time:TIME_FORMAT_RFC_1123);
     return dateHeaderTime.time;
 }
 

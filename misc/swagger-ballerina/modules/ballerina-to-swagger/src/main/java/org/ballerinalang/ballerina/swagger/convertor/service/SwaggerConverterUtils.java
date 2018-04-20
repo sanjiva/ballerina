@@ -19,27 +19,27 @@ package org.ballerinalang.ballerina.swagger.convertor.service;
 import io.swagger.models.Swagger;
 import io.swagger.v3.core.util.Yaml;
 import io.swagger.v3.parser.converter.SwaggerConverter;
-
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.ballerinalang.ballerina.swagger.convertor.Constants;
 import org.ballerinalang.compiler.CompilerPhase;
 import org.ballerinalang.composer.service.ballerina.parser.service.model.BFile;
-import org.ballerinalang.langserver.LSGlobalContext;
-import org.ballerinalang.langserver.LSGlobalContextKeys;
-import org.ballerinalang.langserver.LSPackageCache;
-import org.ballerinalang.langserver.common.modal.BallerinaFile;
-import org.ballerinalang.langserver.common.utils.CommonUtil;
-import org.ballerinalang.langserver.common.utils.LSParserUtils;
+import org.ballerinalang.langserver.compiler.LSCompiler;
+import org.ballerinalang.langserver.compiler.common.modal.BallerinaFile;
+import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManagerImpl;
 import org.ballerinalang.model.tree.ServiceNode;
 import org.ballerinalang.model.tree.TopLevelNode;
 import org.wso2.ballerinalang.compiler.tree.BLangCompilationUnit;
 import org.wso2.ballerinalang.compiler.tree.BLangIdentifier;
 import org.wso2.ballerinalang.compiler.tree.BLangImportPackage;
 import org.wso2.ballerinalang.compiler.tree.BLangService;
-import org.wso2.ballerinalang.compiler.util.CompilerContext;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
-
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
+import java.nio.file.Path;
 import java.util.stream.Collectors;
 
 /**
@@ -47,6 +47,9 @@ import java.util.stream.Collectors;
  */
 
 public class SwaggerConverterUtils {
+
+    private static LSCompiler lsCompiler = new LSCompiler(WorkspaceDocumentManagerImpl.getInstance());
+
     /**
      * This method will generate ballerina string from swagger definition. Since ballerina service definition is super
      * set of swagger definition we will take both swagger and ballerina definition and merge swagger changes to
@@ -61,15 +64,10 @@ public class SwaggerConverterUtils {
         // Get the ballerina model using the ballerina source code.
         BFile balFile = new BFile();
         balFile.setContent(ballerinaSource);
-
-        LSGlobalContext lsGlobalContext = new LSGlobalContext();
-        CompilerContext compilerContext = CommonUtil.prepareTempCompilerContext();
-        lsGlobalContext.put(LSGlobalContextKeys.GLOBAL_COMPILATION_CONTEXT, compilerContext);
-        LSPackageCache.initiate(lsGlobalContext);
-        BallerinaFile ballerinaFile = LSParserUtils.compile(balFile.getContent(),
-                CompilerPhase.DEFINE, lsGlobalContext);
+        //Create empty swagger object.
+        Swagger swaggerDefinition = new Swagger();
+        BallerinaFile ballerinaFile = lsCompiler.compileContent(balFile.getContent(), CompilerPhase.DEFINE);
         BLangCompilationUnit topCompilationUnit  = ballerinaFile.getBLangPackage().getCompilationUnits().get(0);
-        //BLangCompilationUnit topCompilationUnit = LSParserUtils.compile(balFile.getContent(),);
         String httpAlias = getAlias(topCompilationUnit, Constants.BALLERINA_HTTP_PACKAGE_NAME);
         String swaggerAlias = getAlias(topCompilationUnit, Constants.SWAGGER_PACKAGE_NAME);
         SwaggerServiceMapper swaggerServiceMapper = new SwaggerServiceMapper(httpAlias, swaggerAlias);
@@ -80,20 +78,17 @@ public class SwaggerConverterUtils {
                 // Generate swagger string for the mentioned service name.
                 if (StringUtils.isNotBlank(serviceName)) {
                     if (serviceDefinition.getName().getValue().equals(serviceName)) {
-                        Swagger swaggerDefinition = swaggerServiceMapper.convertServiceToSwagger(serviceDefinition);
-                        swaggerSource = swaggerServiceMapper.generateSwaggerString(swaggerDefinition);
+                        swaggerDefinition = swaggerServiceMapper.convertServiceToSwagger(serviceDefinition);
                         break;
                     }
                 } else {
                     // If no service name mentioned, then generate swagger definition for the first service.
-                    Swagger swaggerDefinition = swaggerServiceMapper.convertServiceToSwagger(serviceDefinition);
-                    swaggerSource = swaggerServiceMapper.generateSwaggerString(swaggerDefinition);
+                    swaggerDefinition = swaggerServiceMapper.convertServiceToSwagger(serviceDefinition);
                     break;
                 }
             }
         }
-    
-        return swaggerSource;
+        return swaggerServiceMapper.generateSwaggerString(swaggerDefinition);
     }
 
 
@@ -113,12 +108,7 @@ public class SwaggerConverterUtils {
         balFile.setContent(ballerinaSource);
         //Create empty swagger object.
         Swagger swaggerDefinition = new Swagger();
-        LSGlobalContext lsGlobalContext = new LSGlobalContext();
-        CompilerContext compilerContext = CommonUtil.prepareTempCompilerContext();
-        lsGlobalContext.put(LSGlobalContextKeys.GLOBAL_COMPILATION_CONTEXT, compilerContext);
-        LSPackageCache.initiate(lsGlobalContext);
-        BallerinaFile ballerinaFile = LSParserUtils.compile(balFile.getContent(),
-                CompilerPhase.DEFINE, lsGlobalContext);
+        BallerinaFile ballerinaFile = lsCompiler.compileContent(balFile.getContent(), CompilerPhase.DEFINE);
         BLangCompilationUnit topCompilationUnit  = ballerinaFile.getBLangPackage().getCompilationUnits().get(0);
         String httpAlias = getAlias(topCompilationUnit, Constants.BALLERINA_HTTP_PACKAGE_NAME);
         String swaggerAlias = getAlias(topCompilationUnit, Constants.SWAGGER_PACKAGE_NAME);
@@ -145,6 +135,76 @@ public class SwaggerConverterUtils {
         return Yaml.pretty(converter.readContents(swaggerSource, null, null).getOpenAPI());
     }
 
+    /**
+     * This method will read the contents of ballerina service in {@code servicePath} and write output to
+     * {@code outPath} in OAS3 format.
+     * @see #generateOAS3Definitions(String, String)
+     *
+     * @param servicePath path to ballerina service
+     * @param outPath output path to write generated swagger file
+     * @param serviceName if bal file contain multiple services, name of a specific service to build
+     * @throws IOException when file operations fail
+     */
+    public static void generateOAS3Definitions(Path servicePath, Path outPath, String serviceName) throws IOException {
+        String balSource = readFromFile(servicePath);
+        String swaggerName = getSwaggerFileName(servicePath, serviceName);
+
+        String swaggerSource = generateOAS3Definitions(balSource, serviceName);
+        writeFile(outPath.resolve(swaggerName), swaggerSource);
+    }
+
+    /**
+     * This method will read the contents of ballerina service in {@code servicePath} and write output to
+     * {@code outPath} in Swagger (OAS2) format.
+     * @see #generateSwaggerDefinitions(String, String)
+     *
+     * @param servicePath path to ballerina service
+     * @param outPath output path to write generated swagger file
+     * @param serviceName if bal file contain multiple services, name of a specific service to build
+     * @throws IOException when file operations fail
+     */
+    public static void generateSwaggerDefinitions(Path servicePath, Path outPath, String serviceName)
+            throws IOException {
+        String balSource = readFromFile(servicePath);
+        String swaggerName = getSwaggerFileName(servicePath, serviceName);
+
+        String swaggerSource = generateSwaggerDefinitions(balSource, serviceName);
+        writeFile(outPath.resolve(swaggerName), swaggerSource);
+    }
+
+    private static String readFromFile(Path servicePath) throws IOException {
+        String source = FileUtils.readFileToString(servicePath.toFile(), "UTF-8");
+        return source;
+    }
+
+    private static void writeFile(Path path, String content)
+            throws FileNotFoundException, UnsupportedEncodingException {
+        PrintWriter writer = null;
+
+        try {
+            writer = new PrintWriter(path.toString(), "UTF-8");
+            writer.print(content);
+        } finally {
+            if (writer != null) {
+                writer.close();
+            }
+        }
+    }
+
+    private static String getSwaggerFileName(Path servicePath, String serviceName) {
+        Path file = servicePath.getFileName();
+        String swaggerFile;
+
+        if (StringUtils.isNotBlank(serviceName)) {
+            swaggerFile = serviceName + SwaggerBallerinaConstants.SWAGGER_SUFFIX;
+        } else {
+            swaggerFile = file != null ?
+                    FilenameUtils.removeExtension(file.toString()) + SwaggerBallerinaConstants.SWAGGER_SUFFIX :
+                    null;
+        }
+
+        return swaggerFile + SwaggerBallerinaConstants.YAML_EXTENSION;
+    }
 
     /**
      * Gets the alias for a given package from a bLang file root node.

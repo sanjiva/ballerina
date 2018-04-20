@@ -14,7 +14,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-package ballerina.http;
 
 import ballerina/io;
 ////////////////////////////////
@@ -45,7 +44,7 @@ public type Client object {
 
     @Description { value:"Returns the connector that client code uses"}
     @Return { value:"The connector that client code uses" }
-    public function getClient() returns HttpClient {
+    public function getCallerActions() returns HttpClient {
         return self.httpClient;
     }
 
@@ -66,6 +65,7 @@ public type TargetService {
 };
 
 @Description { value:"ClientEndpointConfig struct represents options to be used for HTTP client invocation" }
+@Field {value:"url: Target service URI"}
 @Field {value:"circuitBreaker: Circuit Breaker configuration"}
 @Field {value:"timeoutMillis: Endpoint timeout value in millisecond"}
 @Field {value:"keepAlive: Specifies whether to reuse a connection for multiple requests"}
@@ -74,15 +74,15 @@ public type TargetService {
 @Field {value:"httpVersion: The HTTP version understood by the client"}
 @Field {value:"forwarded: The choice of setting forwarded/x-forwarded header"}
 @Field {value:"followRedirects: Redirect related options"}
-@Field {value:"retry: Retry related options"}
+@Field {value:"retryConfig: Retry related options"}
 @Field {value:"proxy: Proxy server related options"}
 @Field {value:"connectionThrottling: Configurations for connection throttling"}
-@Field {value:"targets: Service(s) accessible through the endpoint. Multiple services can be specified here when using techniques such as load balancing and fail over."}
-@Field {value:"algorithm: The algorithm to be used for load balancing. The HTTP package provides 'roundRobin()' by default."}
-@Field {value:"failoverConfig: Failover configuration"}
+@Field {value:"secureSocket: SSL/TLS related options"}
 @Field {value:"cache: HTTP caching related configurations"}
 @Field {value:"acceptEncoding: Specifies the way of handling accept-encoding header."}
+@Field {value:"auth: HTTP authentication releated configurations."}
 public type ClientEndpointConfig {
+    string url,
     CircuitBreakerConfig? circuitBreaker,
     int timeoutMillis = 60000,
     KeepAlive keepAlive = KEEPALIVE_AUTO,
@@ -91,23 +91,25 @@ public type ClientEndpointConfig {
     string httpVersion = "1.1",
     string forwarded = "disable",
     FollowRedirects? followRedirects,
-    Retry? retry,
-    Proxy? proxyConfig,
+    RetryConfig? retryConfig,
+    ProxyConfig? proxy,
     ConnectionThrottling? connectionThrottling,
-    TargetService[] targets,
-    string|FailoverConfig lbMode = ROUND_ROBIN,
+    SecureSocket? secureSocket,
     CacheConfig cache,
-    string acceptEncoding = "auto",
+    AcceptEncoding acceptEncoding = ACCEPT_ENCODING_AUTO,
+    AuthConfig? auth,
 };
 
 public native function createHttpClient(string uri, ClientEndpointConfig config) returns HttpClient;
 
-@Description { value:"Retry struct represents retry related options for HTTP client invocation" }
+public native function createSimpleHttpClient(string uri, ClientEndpointConfig config) returns HttpClient;
+
+@Description { value:"RetryConfig struct represents retry related options for HTTP client invocation" }
 @Field {value:"count: Number of retry attempts before giving up"}
 @Field {value:"interval: Retry interval in milliseconds"}
 @Field {value:"backOffFactor: Multiplier of the retry interval to exponentailly increase retry interval"}
 @Field {value:"maxWaitInterval: Maximum time of the retry interval in milliseconds"}
-public type Retry {
+public type RetryConfig {
     int count,
     int interval,
     float backOffFactor,
@@ -142,12 +144,12 @@ public type FollowRedirects {
     int maxCount = 5,
 };
 
-@Description { value:"Proxy struct represents proxy server configurations to be used for HTTP client invocation" }
+@Description { value:"ProxyConfig struct represents proxy server configurations to be used for HTTP client invocation" }
 @Field {value:"proxyHost: host name of the proxy server"}
 @Field {value:"proxyPort: proxy server port"}
 @Field {value:"proxyUserName: Proxy server user name"}
 @Field {value:"proxyPassword: proxy server password"}
-public type Proxy {
+public type ProxyConfig {
     string host,
     int port,
     string userName,
@@ -157,75 +159,78 @@ public type Proxy {
 @Description { value:"This struct represents the options to be used for connection throttling" }
 @Field {value:"maxActiveConnections: Number of maximum active connections for connection throttling. Default value -1, indicates the number of connections are not restricted"}
 @Field {value:"waitTime: Maximum waiting time for a request to grab an idle connection from the client connector"}
+@Field {value:"maxActiveStreamsPerConnection: Maximum number of active streams allowed per an HTTP/2 connection"}
 public type ConnectionThrottling {
     int maxActiveConnections = -1,
     int waitTime = 60000,
+    int maxActiveStreamsPerConnection = -1,
+};
+
+@Description { value:"AuthConfig record represents the authentication mechanism that HTTP client uses" }
+@Field {value:"scheme: scheme of the configuration. (basic, oauth, jwt etc.)"}
+@Field {value:"username: username for basic authentication"}
+@Field {value:"username: password for basic authentication"}
+@Field {value:"accessToken: access token for oauth2 authentication"}
+@Field {value:"refreshToken: refresh token for oauth2 authentication"}
+@Field {value:"refreshToken: refresh token for oauth2 authentication"}
+@Field {value:"refreshUrl: refresh token url for oauth2 authentication"}
+@Field {value:"consumerKey: consume key for oauth2 authentication"}
+@Field {value:"consumerKey: consume key for oauth2 authentication"}
+@Field {value:"consumerSecret: consume secret for oauth2 authentication"}
+@Field {value:"tokenUrl: token url for oauth2 authentication"}
+@Field {value:"clientId: clietnt id for oauth2 authentication"}
+@Field {value:"clientSecret: client secret for oauth2 authentication"}
+public type AuthConfig {
+    string scheme,
+    string username,
+    string password,
+    string accessToken,
+    string refreshToken,
+    string refreshUrl,
+    string consumerKey,
+    string consumerSecret,
+    string tokenUrl,
+    string clientId,
+    string clientSecret,
 };
 
 public function Client::init(ClientEndpointConfig config) {
     boolean httpClientRequired = false;
-    string url = config.targets[0].url;
-    match config.lbMode {
-        FailoverConfig failoverConfig => {
-            if (lengthof config.targets > 1) {
-                self.config = config;
-                self.httpClient = createFailOverClient(config, failoverConfig);
-            } else {
-                if (url.hasSuffix("/")) {
-                    int lastIndex = url.length() - 1;
-                    url = url.subString(0, lastIndex);
-                }
-                self.config = config;
-
+    string url = config.url;
+    if (url.hasSuffix("/")) {
+        int lastIndex = url.length() - 1;
+        url = url.subString(0, lastIndex);
+    }
+    self.config = config;
+    var cbConfig = config.circuitBreaker;
+    match cbConfig {
+        CircuitBreakerConfig cb => {
+            if (url.hasSuffix("/")) {
+                int lastIndex = url.length() - 1;
+                url = url.subString(0, lastIndex);
+            }
+            httpClientRequired = false;
+        }
+        () => {
+            httpClientRequired = true;
+        }
+    }
+    if (httpClientRequired) {
+        var retryConfigVal = config.retryConfig;
+        match retryConfigVal {
+            RetryConfig retryConfig => {
+                self.httpClient = createRetryClient(url, config);
+            }
+            () => {
                 if (config.cache.enabled) {
                     self.httpClient = createHttpCachingClient(url, config, config.cache);
-                } else{
-                    self.httpClient = createHttpClient(url, config);
-                }
-            }
-        }
-
-        string lbAlgorithm => {
-            if (lengthof config.targets > 1) {
-                self.httpClient = createLoadBalancerClient(config, lbAlgorithm);
-            } else {
-                if (url.hasSuffix("/")) {
-                    int lastIndex = url.length() - 1;
-                    url = url.subString(0, lastIndex);
-                }
-                self.config = config;
-                var cbConfig = config.circuitBreaker;
-                match cbConfig {
-                    CircuitBreakerConfig cb => {
-                        if (url.hasSuffix("/")) {
-                            int lastIndex = url.length() - 1;
-                            url = url.subString(0, lastIndex);
-                        }
-                        httpClientRequired = false;
-                    }
-                    () => {
-                        httpClientRequired = true;
-                    }
-                }
-                if (httpClientRequired) {
-                    var retryConfig = config.retry;
-                    match retryConfig {
-                        Retry retry => {
-                            self.httpClient = createRetryClient(url, config);
-                        }
-                        () => {
-                            if (config.cache.enabled) {
-                                self.httpClient = createHttpCachingClient(url, config, config.cache);
-                            } else{
-                                self.httpClient = createHttpClient(url, config);
-                            }
-                        }
-                    }
                 } else {
-                    self.httpClient = createCircuitBreakerClient(url, config);
+                    self.httpClient = createHttpSecureClient(url, config);
                 }
             }
         }
+    } else {
+        self.httpClient = createCircuitBreakerClient(url, config);
     }
 }
 
@@ -236,22 +241,22 @@ function createCircuitBreakerClient (string uri, ClientEndpointConfig configurat
             validateCircuitBreakerConfiguration(cb);
             boolean [] statusCodes = populateErrorCodeIndex(cb.statusCodes);
             HttpClient cbHttpClient = new;
-            var retryConfig = configuration.retry;
-            match retryConfig {
-                Retry retry => {
+            var retryConfigVal = configuration.retryConfig;
+            match retryConfigVal {
+                RetryConfig retryConfig => {
                     cbHttpClient = createRetryClient(uri, configuration);
                 }
                 () => {
                     if (configuration.cache.enabled) {
                         cbHttpClient = createHttpCachingClient(uri, configuration, configuration.cache);
                     } else{
-                        cbHttpClient = createHttpClient(uri, configuration);
+                        cbHttpClient = createHttpSecureClient(uri, configuration);
                     }
                 }
             }
 
             time:Time circuitStartTime = time:currentTime();
-            int numberOfBuckets = (cb.rollingWindow.timeWindow / cb.rollingWindow.bucketSize);
+            int numberOfBuckets = (cb.rollingWindow.timeWindowMillis/ cb.rollingWindow.bucketSizeMillis);
             Bucket[] bucketArray = [];
             int bucketIndex = 0;
             while (bucketIndex < numberOfBuckets) {
@@ -261,7 +266,7 @@ function createCircuitBreakerClient (string uri, ClientEndpointConfig configurat
 
             CircuitBreakerInferredConfig circuitBreakerInferredConfig = {
                                                                 failureThreshold:cb.failureThreshold,
-                                                                resetTimeMillies:cb.resetTimeMillies,
+                                                                resetTimeMillis:cb.resetTimeMillis,
                                                                 statusCodes:statusCodes,
                                                                 noOfBuckets:numberOfBuckets,
                                                                 rollingWindow:cb.rollingWindow
@@ -274,36 +279,20 @@ function createCircuitBreakerClient (string uri, ClientEndpointConfig configurat
             if (configuration.cache.enabled) {
                 return createHttpCachingClient(uri, configuration, configuration.cache);
             } else {
-                return createHttpClient(uri, configuration);
+                return createHttpSecureClient(uri, configuration);
             }
         }
     }
 }
 
-function createLoadBalancerClient(ClientEndpointConfig config, string lbAlgorithm) returns HttpClient {
-    HttpClient[] lbClients = createHttpClientArray(config);
-    return new LoadBalancer(config.targets[0].url, config, lbClients, lbAlgorithm, 0);
-}
-
-public function createFailOverClient(ClientEndpointConfig config, FailoverConfig foConfig) returns HttpClient {
-        HttpClient[] clients = createHttpClientArray(config);
-
-        boolean[] failoverCodes = populateErrorCodeIndex(foConfig.failoverCodes);
-        FailoverInferredConfig failoverInferredConfig = {failoverClientsArray : clients,
-                                                            failoverCodesIndex : failoverCodes,
-                                                            failoverInterval : foConfig.interval};
-
-        return new Failover(config.targets[0].url, config, failoverInferredConfig);
-}
-
 function createRetryClient (string url, ClientEndpointConfig configuration) returns HttpClient {
-    var retryConfig = configuration.retry;
-    match retryConfig {
-        Retry retry => {
+    var retryConfigVal = configuration.retryConfig;
+    match retryConfigVal {
+        RetryConfig retryConfig => {
             if (configuration.cache.enabled) {
-                return new RetryClient(url, configuration, retry, createHttpCachingClient(url, configuration, configuration.cache));
+                return new RetryClient(url, configuration, retryConfig, createHttpCachingClient(url, configuration, configuration.cache));
             } else{
-                return new RetryClient(url, configuration, retry, createHttpClient(url, configuration));
+                return new RetryClient(url, configuration, retryConfig, createHttpSecureClient(url, configuration));
             }
         }
         () => {
@@ -311,7 +300,7 @@ function createRetryClient (string url, ClientEndpointConfig configuration) retu
             if (configuration.cache.enabled) {
                 return createHttpCachingClient(url, configuration, configuration.cache);
             } else {
-                return createHttpClient(url, configuration);
+                return createHttpSecureClient(url, configuration);
             }
         }
     }

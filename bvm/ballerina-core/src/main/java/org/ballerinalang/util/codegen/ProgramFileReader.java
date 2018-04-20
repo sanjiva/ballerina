@@ -381,6 +381,8 @@ public class ProgramFileReader {
         // Resolve unresolved CP entries.
         resolveCPEntries();
 
+        resolveTypeDefinitionEntries(packageInfo);
+
         // Read attribute info entries
         readAttributeInfoEntries(dataInStream, packageInfo, packageInfo);
 
@@ -490,7 +492,7 @@ public class ProgramFileReader {
             for (int j = 0; j < memberTypeCount; j++) {
                 int memberTypeCPIndex = dataInStream.readInt();
                 TypeRefCPEntry typeRefCPEntry = (TypeRefCPEntry) packageInfo.getCPEntry(memberTypeCPIndex);
-                finiteType.memberTypes.add(getBTypeFromDescriptor(typeRefCPEntry.getTypeSig()));
+                finiteType.memberCPEntries.add(typeRefCPEntry);
             }
 
             int valueSpaceCount = dataInStream.readShort();
@@ -501,6 +503,17 @@ public class ProgramFileReader {
             readAttributeInfoEntries(dataInStream, packageInfo, typeDefinitionInfo);
         }
 
+    }
+
+    private void resolveTypeDefinitionEntries(PackageInfo packageInfo) {
+        TypeDefinitionInfo[] typeDefinitionInfos = packageInfo.getTypeDefinitionInfoEntries();
+        for (TypeDefinitionInfo typeDefInfo : typeDefinitionInfos) {
+            BFiniteType finiteType = typeDefInfo.getType();
+            finiteType.memberCPEntries.forEach(typeRefCPEntry -> {
+                finiteType.memberTypes.add(typeRefCPEntry.getType());
+            });
+            finiteType.memberCPEntries.clear();
+        }
     }
 
     private void readServiceInfoEntries(DataInputStream dataInStream,
@@ -1419,6 +1432,7 @@ public class ProgramFileReader {
                 case InstructionCodes.AWAIT:
                 case InstructionCodes.CHECK_CONVERSION:
                 case InstructionCodes.XMLLOADALL:
+                case InstructionCodes.ARRAY2JSON:
                     i = codeStream.readInt();
                     j = codeStream.readInt();
                     packageInfo.addInstruction(InstructionFactory.get(opcode, i, j));
@@ -1450,7 +1464,6 @@ public class ProgramFileReader {
                 case InstructionCodes.BFIELDSTORE:
                 case InstructionCodes.LFIELDSTORE:
                 case InstructionCodes.RFIELDSTORE:
-                case InstructionCodes.MAPLOAD:
                 case InstructionCodes.MAPSTORE:
                 case InstructionCodes.JSONLOAD:
                 case InstructionCodes.JSONSTORE:
@@ -1507,6 +1520,7 @@ public class ProgramFileReader {
                 case InstructionCodes.T2JSON:
                 case InstructionCodes.MAP2JSON:
                 case InstructionCodes.JSON2MAP:
+                case InstructionCodes.JSON2ARRAY:
                     i = codeStream.readInt();
                     j = codeStream.readInt();
                     k = codeStream.readInt();
@@ -1515,6 +1529,7 @@ public class ProgramFileReader {
                 case InstructionCodes.NEWQNAME:
                 case InstructionCodes.NEWXMLELEMENT:
                 case InstructionCodes.TR_BEGIN:
+                case InstructionCodes.MAPLOAD:
                     i = codeStream.readInt();
                     j = codeStream.readInt();
                     k = codeStream.readInt();
@@ -1706,35 +1721,33 @@ public class ProgramFileReader {
 
     private DefaultValue getDefaultValue(DataInputStream dataInStream, ConstantPool constantPool)
             throws IOException {
-        DefaultValue defaultValue;
         int typeDescCPIndex = dataInStream.readInt();
         UTF8CPEntry typeDescCPEntry = (UTF8CPEntry) constantPool.getCPEntry(typeDescCPIndex);
         String typeDesc = typeDescCPEntry.getValue();
+        DefaultValue defaultValue = new DefaultValue(typeDescCPIndex, typeDesc);
 
         int valueCPIndex;
         switch (typeDesc) {
             case TypeSignature.SIG_BOOLEAN:
                 boolean boolValue = dataInStream.readBoolean();
-                defaultValue = new DefaultValue(typeDescCPIndex, typeDesc);
                 defaultValue.setBooleanValue(boolValue);
                 break;
             case TypeSignature.SIG_INT:
                 valueCPIndex = dataInStream.readInt();
                 IntegerCPEntry integerCPEntry = (IntegerCPEntry) constantPool.getCPEntry(valueCPIndex);
-                defaultValue = new DefaultValue(typeDescCPIndex, typeDesc);
                 defaultValue.setIntValue(integerCPEntry.getValue());
                 break;
             case TypeSignature.SIG_FLOAT:
                 valueCPIndex = dataInStream.readInt();
                 FloatCPEntry floatCPEntry = (FloatCPEntry) constantPool.getCPEntry(valueCPIndex);
-                defaultValue = new DefaultValue(typeDescCPIndex, typeDesc);
                 defaultValue.setFloatValue(floatCPEntry.getValue());
                 break;
             case TypeSignature.SIG_STRING:
                 valueCPIndex = dataInStream.readInt();
                 UTF8CPEntry stringCPEntry = (UTF8CPEntry) constantPool.getCPEntry(valueCPIndex);
-                defaultValue = new DefaultValue(typeDescCPIndex, typeDesc);
                 defaultValue.setStringValue(stringCPEntry.getValue());
+                break;
+            case TypeSignature.SIG_NULL:
                 break;
             default:
                 throw new ProgramFileFormatException("unknown default value type " + typeDesc);
@@ -1763,6 +1776,9 @@ public class ProgramFileReader {
             case TypeSignature.SIG_STRING:
                 String stringValue = defaultValue.getStringValue();
                 value = new BString(stringValue);
+                break;
+            case TypeSignature.SIG_NULL:
+                value = null;
                 break;
             default:
                 throw new ProgramFileFormatException("unknown default value type " + typeDesc);
