@@ -25,7 +25,7 @@ const { workspace } = require('vscode');
 
 let serverProcess;
 const libPath = '/bre/lib/*'
-const composerlibPath = '/resources/composer/services/*';
+const composerlibPath = '/lib/resources/composer/services/*';
 const main = 'org.ballerinalang.vscode.server.Main';
 
 let LSService;
@@ -33,14 +33,14 @@ let parserService;
 
 function getClassPath() {
     const customClassPath = workspace.getConfiguration('ballerina').get('classpath');
-    const sdkPath = workspace.getConfiguration('ballerina').get('sdk');
+    const sdkPath = workspace.getConfiguration('ballerina').get('home');
     const jarPath = path.join(__dirname, 'server-build', 'plugin-vscode-server.jar');
 	// in windows class path seperated by ';'
 	const sep = process.platform === 'win32' ? ';' : ':';
     let classpath = path.join(sdkPath, composerlibPath) + sep + path.join(sdkPath, libPath) + sep + jarPath;
 
     if (customClassPath) {
-        classpath =  path.join(customClassPath, '/*') + sep + classpath;
+        classpath =  customClassPath + sep + classpath;
     }
     return classpath;
 }
@@ -72,6 +72,7 @@ function startServices() {
             // Server is closed so that no more connections will be accepted
             server.close();
             onLSStarted({ reader: stream, writer: stream });
+            console.log('Ballerina Language Server connected on port: ', LSPort);
         });
         server.on('error', onLSError);
         server.listen(LSPort, () => {
@@ -81,9 +82,11 @@ function startServices() {
             const args = ['-cp', getClassPath()]
 
             if (process.env.LSDEBUG === "true") {
+                console.log('LSDEBUG is set to "true". Services will run on debug mode');
                 args.push('-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005,quiet=y')
             }
 
+            console.log('Starting parser service on: ', parserPort);
             serverProcess = spawn('java', [...args, main, LSPort, parserPort]);
 
             serverProcess.stdout.on('data', (data) => {

@@ -23,7 +23,7 @@ public type {{name}}ClientEp object {
 
 public function {{name}}ClientEp::init({{name}}ClientConfig config) {
     endpoint http:Client httpEp {
-        targets:[{url: config.serviceUrl}]
+        url: config.serviceUrl
     };
 
     self.client = httpEp;
@@ -55,7 +55,7 @@ public function {{../name}}Client::{{name}}({{#parameters}}{{type}} {{name}}{{#u
     //Create the required request as needed{{#contentType}}
     request.setHeader("Content-Type", "{{contentType}}");{{/contentType}}
     string path = string `{{path}}`;
-    var res = ep -> {{lower method}}(path, request);
+    var res = ep -> {{lower method}}(path, request = request);
 
     match res {
         http:HttpConnectorError httpError => {
@@ -69,7 +69,7 @@ public function {{../name}}Client::{{name}}({{#parameters}}{{type}} {{name}}{{#u
 {{#if endpoints}}//======================================================
 //============Invocation of Generated Client============
 //======================================================
-function main (string[] args) { {{#endpoints}}
+function main (string... args) { {{#endpoints}}
     endpoint {{../name}}ClientEp ep{{@index}} {
         serviceUrl: "{{url}}"
     };{{/endpoints}}
@@ -80,9 +80,9 @@ function main (string[] args) { {{#endpoints}}
     match (res) {
         error err => io:println(err.message);
             http:Response resp => {
-                var payload = resp.getStringPayload();
+                var payload = resp.getTextPayload();
                 match payload {
-                    http:PayloadError err => io:println(err.message);
+                    error err => io:println(err.message);
                     string message => io:println(message);
                 }
             }
