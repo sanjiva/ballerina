@@ -14,7 +14,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-
 import ballerina/io;
 
 ////////////////////////////////
@@ -47,12 +46,6 @@ public type Client object {
     }
     public function init(ClientEndpointConfig config);
 
-    public function register(typedesc serviceType) {
-    }
-
-    public function start() {
-    }
-
     documentation {
         Returns the HTTP actions associated with the endpoint.
 
@@ -60,12 +53,6 @@ public type Client object {
     }
     public function getCallerActions() returns CallerActions {
         return self.httpClient;
-    }
-
-    documentation {
-        Stops the registered service
-    }
-    public function stop() {
     }
 };
 
@@ -87,7 +74,6 @@ documentation {
     F{{circuitBreaker}} Configurations associated with Circuit Breaker behaviour
     F{{timeoutMillis}} The maximum time to wait (in milliseconds) for a response before closing the connection
     F{{keepAlive}} Specifies whether to reuse a connection for multiple requests
-    F{{transferEncoding}} The types of encoding applied to the request
     F{{chunking}} The chunking behaviour of the request
     F{{httpVersion}} The HTTP version understood by the client
     F{{forwarded}} The choice of setting `forwarded`/`x-forwarded` header
@@ -97,7 +83,7 @@ documentation {
     F{{connectionThrottling}} Configurations for connection throttling
     F{{secureSocket}} SSL/TLS related options
     F{{cache}} HTTP caching related configurations
-    F{{acceptEncoding}} Specifies the way of handling `accept-encoding` header
+    F{{compression}} Specifies the way of handling compression (`accept-encoding`) header
     F{{auth}} HTTP authentication releated configurations
 }
 public type ClientEndpointConfig {
@@ -105,7 +91,6 @@ public type ClientEndpointConfig {
     CircuitBreakerConfig? circuitBreaker,
     int timeoutMillis = 60000,
     KeepAlive keepAlive = KEEPALIVE_AUTO,
-    TransferEncoding transferEncoding = "CHUNKING",
     Chunking chunking = "AUTO",
     string httpVersion = "1.1",
     string forwarded = "disable",
@@ -115,13 +100,13 @@ public type ClientEndpointConfig {
     ConnectionThrottling? connectionThrottling,
     SecureSocket? secureSocket,
     CacheConfig cache,
-    AcceptEncoding acceptEncoding = ACCEPT_ENCODING_AUTO,
+    Compression compression = COMPRESSION_AUTO,
     AuthConfig? auth,
 };
 
-public native function createHttpClient(string uri, ClientEndpointConfig config) returns CallerActions;
+native function createHttpClient(string uri, ClientEndpointConfig config) returns CallerActions;
 
-public native function createSimpleHttpClient(string uri, ClientEndpointConfig config) returns CallerActions;
+native function createSimpleHttpClient(string uri, ClientEndpointConfig config) returns CallerActions;
 
 documentation {
     Provides configurations for controlling the retry behaviour in failure scenarios.
@@ -166,7 +151,7 @@ documentation {
     Provides configurations for controlling the endpoint's behaviour in response to HTTP redirect related responses.
 
     F{{enabled}} Enable/disable redirection
-    F{{maxCount}} Maximun number of redirects to follow
+    F{{maxCount}} Maximum number of redirects to follow
 }
 public type FollowRedirects {
     boolean enabled = false,
@@ -271,7 +256,7 @@ public function Client::init(ClientEndpointConfig config) {
     }
 }
 
-function createCircuitBreakerClient (string uri, ClientEndpointConfig configuration) returns CallerActions {
+function createCircuitBreakerClient(string uri, ClientEndpointConfig configuration) returns CallerActions {
     var cbConfig = configuration.circuitBreaker;
     match cbConfig {
         CircuitBreakerConfig cb => {
@@ -322,7 +307,7 @@ function createCircuitBreakerClient (string uri, ClientEndpointConfig configurat
     }
 }
 
-function createRetryClient (string url, ClientEndpointConfig configuration) returns CallerActions {
+function createRetryClient(string url, ClientEndpointConfig configuration) returns CallerActions {
     var retryConfigVal = configuration.retryConfig;
     match retryConfigVal {
         RetryConfig retryConfig => {

@@ -48,9 +48,9 @@ public interface Server {
      * Executes main function of ballerina files.
      *
      * @param args Ballerina files to be passed as arguments
-     * @throws Exception if any exception is thrown when running the main function
+     * @throws BallerinaTestException if any exception is thrown when running the main function
      */
-    public void runMain(String[] args) throws BallerinaTestException;
+    public void runMain(String[] args, String [] envVariables, String command) throws BallerinaTestException;
 
     /**
      * Checks if the server is already running.

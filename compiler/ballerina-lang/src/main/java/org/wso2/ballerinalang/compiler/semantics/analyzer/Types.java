@@ -217,7 +217,7 @@ public class Types {
         }
 
         if (target.tag == TypeTags.STREAM && source.tag == TypeTags.STREAM) {
-            return true;
+            return isAssignable(((BStreamType) source).constraint, ((BStreamType) target).constraint);
         }
 
         BSymbol symbol = symResolver.resolveImplicitConversionOp(source, target);
@@ -296,6 +296,10 @@ public class Types {
         if (target == source) {
             // TODO Figure out this.
             return true;
+        }
+
+        if (target.tag == TypeTags.UNION) {
+            return isAssignable(source, target);
         }
 
         // In this case, lhs type should be of type 'any' and the rhs type cannot be a value type

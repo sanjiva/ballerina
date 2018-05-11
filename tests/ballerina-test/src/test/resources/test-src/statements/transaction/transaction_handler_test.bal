@@ -90,7 +90,6 @@ function testTransactionAbortStmtWithNoAbortHandler() returns (string) {
     return a;
 }
 
-
 function testTransactionAbortStmtWithCommitHandler() returns (string) {
     a = "";
     a = a + "start";
@@ -159,7 +158,7 @@ function testTransactionThrowWithAllHandlers() returns (string) {
             a = a + " inTrx";
             int i = 0;
             if (i == 0) {
-                TrxError err = {message:" trxErr", data:"test"};
+                TrxError err = { message: " trxErr", data: "test" };
                 throw err;
             }
             a = a + " endTrx";
@@ -181,7 +180,7 @@ function testTransactionCommitAfterFailureWithAllHandlers() returns (string) {
         transaction with retries = 4, oncommit = commitFunction, onabort = abortFunction {
             a = a + " inTrx";
             if (i < 2) {
-                TrxError err = {message:" trxErr", data:"test"};
+                TrxError err = { message: " trxErr", data: "test" };
                 throw err;
             }
             a = a + " endTrx";
@@ -227,7 +226,7 @@ function testMultipleTransactionsFailedWithAllHandlers() returns (string) {
         transaction with retries = 0, oncommit = commitFunction, onabort = abortFunction {
             a = a + " inFirstTrx";
             if (i == 0) {
-                TrxError err = {message:" trxErr", data:"test"};
+                TrxError err = { message: " trxErr", data: "test" };
                 throw err;
             }
             a = a + " endFirstTrx";
@@ -251,7 +250,6 @@ function testMultipleTransactionsFailedWithAllHandlers() returns (string) {
     a = a + " end";
     return a;
 }
-
 
 function testMultipleTransactionsWithAllHandlersWithID() returns (string, string, string, string, string) {
     a = "";
@@ -288,7 +286,7 @@ function testMultipleTransactionsFailedWithAllHandlersWithID() returns (string, 
             id1WithinTx = transactions:getCurrentTransactionId();
             a = a + " inFirstTrx";
             if (i == 0) {
-                TrxError err = {message:" trxErr", data:"test"};
+                TrxError err = { message: " trxErr", data: "test" };
                 throw err;
             }
             a = a + " endFirstTrx";
@@ -315,7 +313,6 @@ function testMultipleTransactionsFailedWithAllHandlersWithID() returns (string, 
     return (a, id1WithinTx, idAfterHandler, id2WithinTx, idWithinHandler);
 }
 
-
 function commitFunction(string transactionid) {
     idWithinHandler = transactionid;
     a = a + " incommitFunction";
@@ -330,7 +327,6 @@ function commitFunctionSecond(string transactionid) {
     idWithinHandler = transactionid;
     a = a + " incommitFunctionSecond";
 }
-
 
 function abortFunctionSecond(string transactionid) {
     idWithinHandler = transactionid;

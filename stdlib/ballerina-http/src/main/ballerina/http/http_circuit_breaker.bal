@@ -19,7 +19,11 @@ import ballerina/time;
 import ballerina/io;
 
 documentation {
-    A finite type for modeling the states of the Circuit Breaker.
+    A finite type for modeling the states of the Circuit Breaker. The Circuit Breaker starts in the `CLOSED` state.
+    If any failure thresholds are exceeded during execution, the circuit trips and goes to the `OPEN` state. After
+    the specified timeout period expires, the circuit goes to the `HALF_OPEN` state. If the trial request sent while
+    in the `HALF_OPEN` state succeeds, the circuit goes back to the `CLOSED` state.
+
 }
 public type CircuitState "OPEN" | "HALF_OPEN" | "CLOSED";
 
@@ -65,6 +69,7 @@ public type CircuitHealth {
 documentation {
     Provides a set of configurations for controlling the behaviour of the Circuit Breaker.
 
+    F{{rollingWindow}} `RollingWindow` options of the `CircuitBreaker`
     F{{failureThreshold}} The threshold for request failures. When this threshold exceeds, the circuit trips.
                           The threshold should be a value between 0 and 1.
     F{{resetTimeMillis}} The time period(in milliseconds) to wait before attempting to make another request to
@@ -93,13 +98,24 @@ documentation {
     Represents a discrete sub-part of the time window (Bucket).
 
     F{{successCount}} Number of successful requests during the sub-window time frame
-    F{{failureCount}} Number of failed requests during the sub-window time frame.
+    F{{failureCount}} Number of failed requests during the sub-window time frame
 }
 public type Bucket {
     int successCount,
     int failureCount,
 };
 
+documentation {
+    Derived set of configurations from the `CircuitBreakerConfig`.
+
+    F{{failureThreshold}} The threshold for request failures. When this threshold exceeds, the circuit trips.
+                          The threshold should be a value between 0 and 1
+    F{{resetTimeMillis}} The time period(in milliseconds) to wait before attempting to make another request to
+                         the upstream service
+    F{{statusCodes}} Array of HTTP response status codes which are considered as failures
+    F{{noOfBuckets}} Number of buckets derived from the `RollingWindow`
+    F{{rollingWindow}} `RollingWindow` options provided in the `CircuitBreakerConfig`
+}
 public type CircuitBreakerInferredConfig {
    float failureThreshold,
    int resetTimeMillis,
@@ -129,6 +145,15 @@ public type CircuitBreakerClient object {
         CircuitState currentCircuitState = CB_CLOSED_STATE;
     }
 
+    documentation {
+        A Circuit Breaker implementation which can be used to gracefully handle network failures.
+
+        P{{serviceUri}} The URL of the target service
+        P{{config}} The configurations of the client endpoint associated with this `CircuitBreaker` instance
+        P{{circuitBreakerInferredConfig}} Configurations derived from `CircuitBreakerConfig`
+        P{{httpClient}}  The underlying `HttpActions` instance which will be making the actual network calls
+        P{{circuitHealth}} The circuit health monitor
+    }
     public new (string serviceUri, ClientEndpointConfig config, CircuitBreakerInferredConfig circuitBreakerInferredConfig,
                                                                             CallerActions httpClient, CircuitHealth circuitHealth) {
         self.serviceUri = serviceUri;
@@ -144,10 +169,9 @@ public type CircuitBreakerClient object {
 
         P{{path}} Resource path
         P{{request}} A Request struct
-        R{{}} The Response struct
-        R{{}} The error occurred while attempting to fulfill the HTTP request (if any)
+        R{{}} The response for the request or an `error` if failed to establish communication with the upstream server
     }
-    public function post(string path, Request? request = ()) returns Response|HttpConnectorError;
+    public function post(string path, Request? request = ()) returns Response|error;
 
     documentation {
         The HEAD action implementation of the Circuit Breaker. This wraps the `head()` function of the underlying
@@ -155,10 +179,9 @@ public type CircuitBreakerClient object {
 
         P{{path}} Resource path
         P{{request}} A Request struct
-        R{{}} The Response struct
-        R{{}} The error occurred while attempting to fulfill the HTTP request (if any)
+        R{{}} The response for the request or an `error` if failed to establish communication with the upstream server
      }
-    public function head(string path, Request? request = ()) returns Response|HttpConnectorError;
+    public function head(string path, Request? request = ()) returns Response|error;
 
     documentation {
         The PUT action implementation of the Circuit Breaker. This wraps the `put()` function of the underlying
@@ -166,10 +189,9 @@ public type CircuitBreakerClient object {
 
         P{{path}} Resource path
         P{{request}} A Request struct
-        R{{}} The Response struct
-        R{{}} The error occurred while attempting to fulfill the HTTP request (if any)
+        R{{}} The response for the request or an `error` if failed to establish communication with the upstream server
     }
-    public function put(string path, Request? request = ()) returns Response|HttpConnectorError;
+    public function put(string path, Request? request = ()) returns Response|error;
 
     documentation {
         This wraps the `post()` function of the underlying HTTP actions provider. The `execute()` function can be used
@@ -178,10 +200,9 @@ public type CircuitBreakerClient object {
         P{{httpVerb}} HTTP verb to be used for the request
         P{{path}} Resource path
         P{{request}} A Request struct
-        R{{}} The Response struct
-        R{{}} The error occurred while attempting to fulfill the HTTP request (if any)
+        R{{}} The response for the request or an `error` if failed to establish communication with the upstream server
     }
-    public function execute(string httpVerb, string path, Request request) returns Response|HttpConnectorError;
+    public function execute(string httpVerb, string path, Request request) returns Response|error;
 
     documentation {
         The PATCH action implementation of the Circuit Breaker. This wraps the `patch()` function of the underlying
@@ -189,10 +210,9 @@ public type CircuitBreakerClient object {
 
         P{{path}} Resource path
         P{{request}} A Request struct
-        R{{}} The Response struct
-        R{{}} The error occurred while attempting to fulfill the HTTP request (if any)
+        R{{}} The response for the request or an `error` if failed to establish communication with the upstream server
     }
-    public function patch(string path, Request? request = ()) returns Response|HttpConnectorError;
+    public function patch(string path, Request? request = ()) returns Response|error;
 
     documentation {
         The DELETE action implementation of the Circuit Breaker. This wraps the `delete()` function of the underlying
@@ -200,10 +220,9 @@ public type CircuitBreakerClient object {
 
         P{{path}} Resource path
         P{{request}} A Request struct
-        R{{}} The Response struct
-        R{{}} The error occurred while attempting to fulfill the HTTP request (if any)
+        R{{}} The response for the request or an `error` if failed to establish communication with the upstream server
     }
-    public function delete(string path, Request? request = ()) returns Response|HttpConnectorError;
+    public function delete(string path, Request? request = ()) returns Response|error;
 
     documentation {
         The GET action implementation of the Circuit Breaker. This wraps the `get()` function of the underlying
@@ -211,10 +230,9 @@ public type CircuitBreakerClient object {
 
         P{{path}} Resource path
         P{{request}} A Request struct
-        R{{}} The Response struct
-        R{{}} The error occurred while attempting to fulfill the HTTP request (if any)
+        R{{}} The response for the request or an `error` if failed to establish communication with the upstream server
     }
-    public function get(string path, Request? request = ()) returns Response|HttpConnectorError;
+    public function get(string path, Request? request = ()) returns Response|error;
 
     documentation {
         The OPTIONS action implementation of the Circuit Breaker. This wraps the `options()` function of the underlying
@@ -222,10 +240,9 @@ public type CircuitBreakerClient object {
 
         P{{path}} Resource path
         P{{request}} A Request struct
-        R{{}} The Response struct
-        R{{}} The error occurred while attempting to fulfill the HTTP request (if any)
+        R{{}} The response for the request or an `error` if failed to establish communication with the upstream server
     }
-    public function options(string path, Request? request = ()) returns Response|HttpConnectorError;
+    public function options(string path, Request? request = ()) returns Response|error;
 
     documentation {
         This wraps the `forward()` function of the underlying HTTP actions provider. The Forward action can be used to
@@ -233,37 +250,34 @@ public type CircuitBreakerClient object {
 
         P{{path}} Resource path
         P{{request}} A Request struct
-        R{{}} The Response struct
-        R{{}} The error occurred while attempting to fulfill the HTTP request (if any)
+        R{{}} The response for the request or an `error` if failed to establish communication with the upstream server
     }
-    public function forward(string path, Request request) returns Response|HttpConnectorError;
+    public function forward(string path, Request request) returns Response|error;
 
     documentation {
         Circuit breaking not supported. Defaults to the `submit()` function of the underlying HTTP actions provider.
 
-        P{{httpVerb}} The HTTP verb
+        P{{httpVerb}} The HTTP verb value
         P{{path}} The resource path
         P{{request}} An HTTP outbound request message
-        R{{}} The `Future` for further interactions
-        R{{}} The error occurred while attempting to fulfill the HTTP request (if any)
+        R{{}} An `HttpFuture` that represents an asynchronous service invocation, or an `error` if the submission fails
     }
-    public function submit(string httpVerb, string path, Request request) returns HttpFuture|HttpConnectorError;
+    public function submit(string httpVerb, string path, Request request) returns HttpFuture|error;
 
     documentation {
         Circuit breaking not supported. Defaults to the `getResponse()` function of the underlying HTTP
         actions provider.
 
-        P{{httpFuture}} The Future which relates to previous async invocation
-        R{{}} The HTTP response message
-        R{{}} The error occurred while attempting to fulfill the HTTP request (if any)
+        P{{httpFuture}} The `HttpFuture` related to a previous asynchronous invocation
+        R{{}} An HTTP response message, or an `error` if the invocation fails
     }
-    public function getResponse(HttpFuture httpFuture) returns Response|HttpConnectorError;
+    public function getResponse(HttpFuture httpFuture) returns Response|error;
 
     documentation {
         Circuit breaking not supported. Defaults to the `hasPromise()` function of the underlying HTTP actions provider.
 
-        P{{httpFuture}} The Future which relates to previous async invocation
-        R{{}} Returns true if the `PushPromise` exists
+        P{{httpFuture}} The `HttpFuture` relates to a previous asynchronous invocation
+        R{{}} A `boolean` that represents whether a `PushPromise` exists
     }
     public function hasPromise(HttpFuture httpFuture) returns (boolean);
 
@@ -271,21 +285,19 @@ public type CircuitBreakerClient object {
         Circuit breaking not supported. Defaults to the `getNextPromise()` function of the underlying HTTP
         actions provider.
 
-        P{{httpFuture}} The Future which relates to previous async invocation
-        R{{}} The HTTP Push Promise message
-        R{{}} The error occurred while attempting to fulfill the HTTP request (if any)
+        P{{httpFuture}} The `HttpFuture` relates to a previous asynchronous invocation
+        R{{}} An HTTP `PushPromise` message, or an `error` if the invocation fails
     }
-    public function getNextPromise(HttpFuture httpFuture) returns (PushPromise|HttpConnectorError);
+    public function getNextPromise(HttpFuture httpFuture) returns PushPromise|error;
 
     documentation {
         Circuit breaking not supported. Defaults to the `getPromisedResponse()` function of the underlying HTTP
         actions provider.
 
-        P{{promise}} The related Push Promise message
-        R{{}} The Push Response message
-        R{{}} The error occurred while attempting to fulfill the HTTP request (if any)
+        P{{promise}} The related `PushPromise`
+        R{{}} A promised HTTP `Response` message, or an `error` if the invocation fails
     }
-    public function getPromisedResponse(PushPromise promise) returns Response|HttpConnectorError;
+    public function getPromisedResponse(PushPromise promise) returns Response|error;
 
     documentation {
         Circuit breaking not supported. Defaults to the `rejectPromise()` function of the underlying HTTP
@@ -296,7 +308,7 @@ public type CircuitBreakerClient object {
     public function rejectPromise(PushPromise promise);
 };
 
-public function CircuitBreakerClient::post(string path, Request? request = ()) returns Response|HttpConnectorError {
+public function CircuitBreakerClient::post(string path, Request? request = ()) returns Response|error {
    CallerActions httpClient = self.httpClient;
    CircuitBreakerInferredConfig cbic = self.circuitBreakerInferredConfig;
    self.currentCircuitState = updateCircuitState(self.circuitHealth, self.currentCircuitState, cbic);
@@ -310,7 +322,7 @@ public function CircuitBreakerClient::post(string path, Request? request = ()) r
                                     updateCircuitHealthSuccess(self.circuitHealth, service_response, self.circuitBreakerInferredConfig);
                                     return service_response;
                                 }
-            HttpConnectorError serviceError => {
+            error serviceError => {
                                     updateCircuitHealthFailure(self.circuitHealth, serviceError, self.circuitBreakerInferredConfig);
                                     return serviceError;
                                 }
@@ -318,7 +330,7 @@ public function CircuitBreakerClient::post(string path, Request? request = ()) r
     }
 }
 
-public function CircuitBreakerClient::head(string path, Request? request = ()) returns Response|HttpConnectorError {
+public function CircuitBreakerClient::head(string path, Request? request = ()) returns Response|error {
    CallerActions httpClient = self.httpClient;
    CircuitBreakerInferredConfig cbic = self.circuitBreakerInferredConfig;
    self.currentCircuitState = updateCircuitState(self.circuitHealth, self.currentCircuitState, cbic);
@@ -332,7 +344,7 @@ public function CircuitBreakerClient::head(string path, Request? request = ()) r
                                     updateCircuitHealthSuccess(self.circuitHealth, service_response, self.circuitBreakerInferredConfig);
                                     return service_response;
                                 }
-            HttpConnectorError serviceError => {
+            error serviceError => {
                                     updateCircuitHealthFailure(self.circuitHealth, serviceError, self.circuitBreakerInferredConfig);
                                     return serviceError;
                                 }
@@ -340,7 +352,7 @@ public function CircuitBreakerClient::head(string path, Request? request = ()) r
      }
 }
 
-public function CircuitBreakerClient::put(string path, Request? request = ()) returns Response|HttpConnectorError {
+public function CircuitBreakerClient::put(string path, Request? request = ()) returns Response|error {
    CallerActions httpClient = self.httpClient;
    CircuitBreakerInferredConfig cbic = self.circuitBreakerInferredConfig;
    self.currentCircuitState = updateCircuitState(self.circuitHealth, self.currentCircuitState, cbic);
@@ -354,7 +366,7 @@ public function CircuitBreakerClient::put(string path, Request? request = ()) re
                                     updateCircuitHealthSuccess(self.circuitHealth, service_response, self.circuitBreakerInferredConfig);
                                     return service_response;
                                 }
-            HttpConnectorError serviceError => {
+            error serviceError => {
                                     updateCircuitHealthFailure(self.circuitHealth, serviceError, self.circuitBreakerInferredConfig);
                                     return serviceError;
                                 }
@@ -363,7 +375,7 @@ public function CircuitBreakerClient::put(string path, Request? request = ()) re
 }
 
 public function CircuitBreakerClient::execute(string httpVerb, string path, Request request) returns Response|
-        HttpConnectorError {
+        error {
    CallerActions httpClient = self.httpClient;
    CircuitBreakerInferredConfig cbic = self.circuitBreakerInferredConfig;
    self.currentCircuitState = updateCircuitState(self.circuitHealth, self.currentCircuitState, cbic);
@@ -377,7 +389,7 @@ public function CircuitBreakerClient::execute(string httpVerb, string path, Requ
                                     updateCircuitHealthSuccess(self.circuitHealth, service_response, self.circuitBreakerInferredConfig);
                                     return service_response;
                                 }
-            HttpConnectorError serviceError => {
+            error serviceError => {
                                     updateCircuitHealthFailure(self.circuitHealth, serviceError, self.circuitBreakerInferredConfig);
                                     return serviceError;
                                 }
@@ -385,7 +397,7 @@ public function CircuitBreakerClient::execute(string httpVerb, string path, Requ
     }
 }
 
-public function CircuitBreakerClient::patch(string path, Request? request = ()) returns Response|HttpConnectorError {
+public function CircuitBreakerClient::patch(string path, Request? request = ()) returns Response|error {
    CallerActions httpClient = self.httpClient;
    CircuitBreakerInferredConfig cbic = self.circuitBreakerInferredConfig;
    self.currentCircuitState = updateCircuitState(self.circuitHealth, self.currentCircuitState, cbic);
@@ -399,7 +411,7 @@ public function CircuitBreakerClient::patch(string path, Request? request = ()) 
                                     updateCircuitHealthSuccess(self.circuitHealth, service_response, self.circuitBreakerInferredConfig);
                                     return service_response;
                                 }
-            HttpConnectorError serviceError => {
+            error serviceError => {
                                     updateCircuitHealthFailure(self.circuitHealth, serviceError, self.circuitBreakerInferredConfig);
                                     return serviceError;
                                 }
@@ -407,7 +419,7 @@ public function CircuitBreakerClient::patch(string path, Request? request = ()) 
     }
 }
 
-public function CircuitBreakerClient::delete(string path, Request? request = ()) returns Response|HttpConnectorError {
+public function CircuitBreakerClient::delete(string path, Request? request = ()) returns Response|error {
    CallerActions httpClient = self.httpClient;
    CircuitBreakerInferredConfig cbic = self.circuitBreakerInferredConfig;
    self.currentCircuitState = updateCircuitState(self.circuitHealth, self.currentCircuitState, cbic);
@@ -421,7 +433,7 @@ public function CircuitBreakerClient::delete(string path, Request? request = ())
                                     updateCircuitHealthSuccess(self.circuitHealth, service_response, self.circuitBreakerInferredConfig);
                                     return service_response;
                                 }
-            HttpConnectorError serviceError => {
+            error serviceError => {
                                     updateCircuitHealthFailure(self.circuitHealth, serviceError, self.circuitBreakerInferredConfig);
                                     return serviceError;
                                 }
@@ -429,7 +441,7 @@ public function CircuitBreakerClient::delete(string path, Request? request = ())
     }
 }
 
-public function CircuitBreakerClient::get(string path, Request? request = ()) returns Response|HttpConnectorError {
+public function CircuitBreakerClient::get(string path, Request? request = ()) returns Response|error {
     CallerActions httpClient = self.httpClient;
     CircuitBreakerInferredConfig cbic = self.circuitBreakerInferredConfig;
     self.currentCircuitState = updateCircuitState(self.circuitHealth, self.currentCircuitState, cbic);
@@ -443,7 +455,7 @@ public function CircuitBreakerClient::get(string path, Request? request = ()) re
                                     updateCircuitHealthSuccess(self.circuitHealth, service_response, self.circuitBreakerInferredConfig);
                                     return service_response;
                                 }
-            HttpConnectorError serviceError => {
+            error serviceError => {
                                     updateCircuitHealthFailure(self.circuitHealth, serviceError, self.circuitBreakerInferredConfig);
                                     return serviceError;
                                 }
@@ -451,7 +463,7 @@ public function CircuitBreakerClient::get(string path, Request? request = ()) re
     }
 }
 
-public function CircuitBreakerClient::options(string path, Request? request = ()) returns Response|HttpConnectorError {
+public function CircuitBreakerClient::options(string path, Request? request = ()) returns Response|error {
    CallerActions httpClient = self.httpClient;
    CircuitBreakerInferredConfig cbic = self.circuitBreakerInferredConfig;
    self.currentCircuitState = updateCircuitState(self.circuitHealth, self.currentCircuitState, cbic);
@@ -465,7 +477,7 @@ public function CircuitBreakerClient::options(string path, Request? request = ()
                                     updateCircuitHealthSuccess(self.circuitHealth, service_response, self.circuitBreakerInferredConfig);
                                     return service_response;
                                 }
-            HttpConnectorError serviceError => {
+            error serviceError => {
                                     updateCircuitHealthFailure(self.circuitHealth, serviceError, self.circuitBreakerInferredConfig);
                                     return serviceError;
                                 }
@@ -473,7 +485,7 @@ public function CircuitBreakerClient::options(string path, Request? request = ()
     }
 }
 
-public function CircuitBreakerClient::forward(string path, Request request) returns Response|HttpConnectorError {
+public function CircuitBreakerClient::forward(string path, Request request) returns Response|error {
    CallerActions httpClient = self.httpClient;
    CircuitBreakerInferredConfig cbic = self.circuitBreakerInferredConfig;
    self.currentCircuitState = updateCircuitState(self.circuitHealth, self.currentCircuitState, cbic);
@@ -487,7 +499,7 @@ public function CircuitBreakerClient::forward(string path, Request request) retu
                                     updateCircuitHealthSuccess(self.circuitHealth, service_response, self.circuitBreakerInferredConfig);
                                     return service_response;
                                 }
-            HttpConnectorError serviceError => {
+            error serviceError => {
                                     updateCircuitHealthFailure(self.circuitHealth, serviceError, self.circuitBreakerInferredConfig);
                                     return serviceError;
                                 }
@@ -495,34 +507,38 @@ public function CircuitBreakerClient::forward(string path, Request request) retu
    }
 }
 
-public function CircuitBreakerClient::submit(string httpVerb, string path, Request request) returns HttpFuture|
-        HttpConnectorError {
-   HttpConnectorError httpConnectorError = {message:"Unsupported action for Circuit breaker"};
-   return httpConnectorError;
+public function CircuitBreakerClient::submit(string httpVerb, string path, Request request) returns HttpFuture|error {
+    return self.httpClient.submit(httpVerb, path, request);
 }
 
-public function CircuitBreakerClient::getResponse(HttpFuture httpFuture) returns Response|HttpConnectorError {
-   HttpConnectorError httpConnectorError = {message:"Unsupported action for Circuit breaker"};
-   return httpConnectorError;
+public function CircuitBreakerClient::getResponse(HttpFuture httpFuture) returns Response|error {
+    return self.httpClient.getResponse(httpFuture);
 }
 
-public function CircuitBreakerClient::hasPromise (HttpFuture httpFuture) returns (boolean) {
-   return false;
+public function CircuitBreakerClient::hasPromise(HttpFuture httpFuture) returns boolean {
+    return self.httpClient.hasPromise(httpFuture);
 }
 
-public function CircuitBreakerClient::getNextPromise (HttpFuture httpFuture) returns (PushPromise | HttpConnectorError) {
-   HttpConnectorError httpConnectorError = {message:"Unsupported action for Circuit breaker"};
-   return httpConnectorError;
+public function CircuitBreakerClient::getNextPromise(HttpFuture httpFuture) returns PushPromise|error {
+    return self.httpClient.getNextPromise(httpFuture);
 }
 
-public function CircuitBreakerClient::getPromisedResponse(PushPromise promise) returns Response|HttpConnectorError {
-   HttpConnectorError httpConnectorError = {message:"Unsupported action for Circuit breaker"};
-   return httpConnectorError;
+public function CircuitBreakerClient::getPromisedResponse(PushPromise promise) returns Response|error {
+    return self.httpClient.getPromisedResponse(promise);
 }
 
 public function CircuitBreakerClient::rejectPromise(PushPromise promise) {
+    return self.httpClient.rejectPromise(promise);
 }
 
+documentation {
+    Update circuit state.
+
+    P{{circuitHealth}}  Circuit Breaker health status
+    P{{currentStateValue}}  Circuit Breaker current state value
+    P{{circuitBreakerInferredConfig}}   Configurations derived from `CircuitBreakerConfig`
+    R{{}} State of the circuit
+}
 // TODO: make this private
 public function updateCircuitState(CircuitHealth circuitHealth, CircuitState currentStateValue,
                                    CircuitBreakerInferredConfig circuitBreakerInferredConfig) returns (CircuitState) {
@@ -566,7 +582,7 @@ public function updateCircuitState(CircuitHealth circuitHealth, CircuitState cur
 }
 
 function updateCircuitHealthFailure(CircuitHealth circuitHealth,
-                             HttpConnectorError httpConnectorError, CircuitBreakerInferredConfig circuitBreakerInferredConfig) {
+                             error httpConnectorErr, CircuitBreakerInferredConfig circuitBreakerInferredConfig) {
     lock {
         time:Time startTime = circuitHealth.startTime;
         time:Time currentTime = time:currentTime();
@@ -610,14 +626,14 @@ function updateCircuitHealthSuccess(CircuitHealth circuitHealth, Response inResp
 
 // Handles open circuit state.
 function handleOpenCircuit(CircuitHealth circuitHealth, CircuitBreakerInferredConfig circuitBreakerInferredConfig)
-                                                                                        returns (HttpConnectorError) {
+                                                                                        returns (error) {
    time:Time currentT = time:currentTime();
    int timeDif = currentT.time - circuitHealth.lastErrorTime.time;
    int timeRemaining = circuitBreakerInferredConfig.resetTimeMillis - timeDif;
    string errorMessage = "Upstream service unavailable. Requests to upstream service will be suspended for "
              + timeRemaining + " milliseconds.";
-   HttpConnectorError httpConnectorError = {message:errorMessage};
-   return httpConnectorError;
+   error httpConnectorErr = {message:errorMessage};
+   return httpConnectorErr;
 }
 
 // Validates the struct configurations passed to create circuit breaker.
@@ -634,7 +650,8 @@ function validateCircuitBreakerConfiguration(CircuitBreakerConfig circuitBreaker
 documentation {
     Calculate Failure at a given point.
 
-    P{{circuitHealth}}  - Circuit Breaker health status.
+    P{{circuitHealth}}  Circuit Breaker health status
+    R{{}} Current failure ratio
 }
 // TODO: make this private
 public function getcurrentFailureRatio(CircuitHealth circuitHealth) returns float {

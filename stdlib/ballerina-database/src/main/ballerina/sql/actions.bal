@@ -25,11 +25,11 @@ public type CallerActions object {
 
         P{{sqlQuery}} SQL statement to execute
         P{{recordType}} Array of record types of the returned tables if there is any
-        R{{}} A `table[]` if there are tables returned by the call action and else nill,
+        R{{}} A `table[]` if there are tables returned by the call action and else nil,
                 `error` will be returned if there is any error
     }
     public native function call(@sensitive string sqlQuery, typedesc[]? recordType, Param... parameters)
-        returns @tainted table[]|error;
+        returns @tainted table[]|()|error;
 
     documentation {
         The select action implementation for SQL connector to select data from tables.
@@ -40,7 +40,7 @@ public type CallerActions object {
         R{{}} A `table` returned by the sql query statement else `error` will be returned if there is any error
     }
     public native function select(@sensitive string sqlQuery, typedesc? recordType, boolean loadToMemory = false,
-    Param... parameters) returns @tainted table|error;
+                                  Param... parameters) returns @tainted table|error;
 
     documentation {
         The update action implementation for SQL connector to update data and schema of the database.
@@ -57,7 +57,7 @@ public type CallerActions object {
         R{{}} An `int[]` array of updated row count by each of statements in batch and
                 else `error` will be returned if there is any error
     }
-    public native function batchUpdate(@sensitive string sqlQuery, Parameter[]... parameters) returns int[]|error;
+    public native function batchUpdate(@sensitive string sqlQuery, Param[]... parameters) returns int[]|error;
 
     documentation {
         The updateWithGeneratedKeys action implementation for SQL connector which returns the auto
@@ -78,12 +78,15 @@ public type CallerActions object {
 
         P{{tableName}} The name of the table to be retrieved
         P{{recordType}} The record type of the returned table
+        R{{}} A `table` returned by the sql query statement else `error` will be returned if there is any error
 
     }
     public native function getProxyTable(@sensitive string tableName, typedesc recordType) returns @tainted table|error;
 };
 
 documentation {
-        The close action implementation for SQL connector to shutdown the connection pool.
+        An internal function used by clients to shutdown the connection pool.
+
+        P{{callerActions}} The CallerActions object which represents the connection pool.
 }
 public native function close(CallerActions callerActions);

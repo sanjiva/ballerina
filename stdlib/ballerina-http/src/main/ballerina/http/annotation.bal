@@ -23,15 +23,15 @@ documentation {
     Contains the configurations for an HTTP service.
 
     F{{endpoints}} An array of endpoints the service would be attached to
-    F{{lifetime}} The life time of the service
     F{{basePath}} Service base path
     F{{compression}} The status of compression
+    F{{chunking}} Configures the chunking behaviour for the service
     F{{cors}} The cross origin resource sharing configurations for the service
-    F{{authConfig}} Authentication Configs to secure the service
+    F{{versioning}} The version of the service to be used
+    F{{authConfig}} Authentication configurations for securing the service
 }
 public type HttpServiceConfig {
     Listener[] endpoints,
-    HttpServiceLifeTime lifetime,
     string basePath,
     Compression compression = "AUTO",
     Chunking chunking = CHUNKING_AUTO,
@@ -63,9 +63,9 @@ public type CorsConfig {
 documentation {
     Configurations for service versioning.
 
-    F{{pattern}} Expecting pattern of the version in the request url
-    F{{allowNoVersion}} Allow to dispatch requests which does not hold version path segment in url
-    F{{matchMajorVersion}} Allow to dispatch requests which specify only the major version in url
+    F{{pattern}} Expected version pattern in the request URL
+    F{{allowNoVersion}} Allow requests with missing version path segment in the URL to be dispatched
+    F{{matchMajorVersion}} Allow requests with only the major version specified in the URL to be dispatched
 }
 public type Versioning {
     string pattern = "v{major}.{minor}",
@@ -74,14 +74,14 @@ public type Versioning {
 };
 
 documentation {
-    Configuration for a WebSocket service.
+    Configurations for a WebSocket service.
 
     F{{endpoints}} An array of endpoints the service would be attached to
     F{{webSocketEndpoints}} An array of endpoints the service would be attached to
     F{{path}} Path of the WebSocket service
     F{{subProtocols}} Negotiable sub protocol by the service
-    F{{idleTimeoutInSeconds}} Idle timeout for the client connection. This can be triggered by putting onIdleTimeout
-                              resource in WS service.
+    F{{idleTimeoutInSeconds}} Idle timeout for the client connection. This can be triggered by putting
+                              an `onIdleTimeout` resource in the WebSocket service.
     F{{maxFrameSize}} The maximum payload size of a WebSocket frame in bytes
 }
 public type WSServiceConfig {
@@ -93,27 +93,16 @@ public type WSServiceConfig {
     int maxFrameSize,
 };
 
-//@Description {value:"This specifies the possible ways in which a service can be used when serving requests."}
-//@Field {value:"REQUEST: Create a new instance of the service to process each request"}
-//@Field {value:"CONNECTION: Create a new instance of the service for each connection"}
-//@Field {value:"SESSION: Create a new instance of the service for each session"}
-//@Field {value:"SINGLETON: Create a single instance of the service and use it to process all requests coming to an endpoint"}
-//public enum HttpServiceLifeTime {
-//    REQUEST,
-//    CONNECTION,
-//    SESSION,
-//    SINGLETON
-//}
-
-public type HttpServiceLifeTime "REQUEST"|"CONNECTION"|"SESSION"|"SINGLETON";
+// TODO: Enable this when Ballerina supports service life time
+//public type HttpServiceLifeTime "REQUEST"|"CONNECTION"|"SESSION"|"SINGLETON";
 
 documentation {
-    Configurations annotation for an HTTP service.
+    The annotation which is used to configure an HTTP service.
 }
 public annotation <service> ServiceConfig HttpServiceConfig;
 
 documentation {
-    Configurations annotation for a WebSocket service.
+    The annotation which is used to configure a WebSocket service.
 }
 public annotation <service> WebSocketServiceConfig WSServiceConfig;
 
@@ -145,16 +134,22 @@ public type HttpResourceConfig {
     ListenerAuthConfig? authConfig,
 };
 
+documentation {
+    Configures the HTTP to WebSocket upgrade.
+
+    F{{upgradePath}} Path which is used to upgrade from HTTP to WebSocket
+    F{{upgradeService}} WebSocket service which should be used after a successful upgrade
+}
 public type WebSocketUpgradeConfig {
     string upgradePath,
     typedesc upgradeService,
 };
 
 documentation {
-    Representation of AuthConfig.
+    Configures the authentication scheme for a service or a resource.
 
-    F{{authentication}} Authentication instance
-    F{{authProviders}} Array of authentication providers
+    F{{authentication}} Enables/disables authentication
+    F{{authProviders}} Array of authentication provider IDs
     F{{scopes}} Array of scopes
 }
 public type ListenerAuthConfig {
@@ -164,15 +159,15 @@ public type ListenerAuthConfig {
 };
 
 documentation {
-    Representation of Authentication Config.
+    Can be used for enabling/disabling authentication in an HTTP service.
 
-    F{{enabled}} flag to enable/disable authentication
+    F{{enabled}} Specifies whether authentication is enabled
 }
 public type Authentication {
     boolean enabled,
 };
 
 documentation {
-    Configurations annotation for an HTTP resource.
+    The annotation which is used to configure an HTTP resource.
 }
 public annotation <resource> ResourceConfig HttpResourceConfig;

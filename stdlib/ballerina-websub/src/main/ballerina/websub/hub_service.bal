@@ -50,24 +50,24 @@ service<http:Service> hubService {
         string mode;
         string topic;
 
-        map params;
+        map<string> params;
         match (request.getFormParams()) {
             map<string> reqFormParamMap => { params = reqFormParamMap; }
             error => {}
         }
 
         if (params.hasKey(HUB_MODE)) {
-            mode = <string>params[HUB_MODE];
+            mode = params[HUB_MODE];
         }
 
         if (params.hasKey(HUB_TOPIC)) {
-            string topicFromParams = <string>params[HUB_TOPIC];
+            string topicFromParams = params[HUB_TOPIC];
             topic = http:decode(topicFromParams, "UTF-8") but { error => topicFromParams };
         }
 
         if (mode == MODE_SUBSCRIBE || mode == MODE_UNSUBSCRIBE) {
             boolean validSubscriptionRequest = false;
-            string callbackFromParams = <string>params[HUB_CALLBACK];
+            string callbackFromParams = params[HUB_CALLBACK];
             string callback = http:decode(callbackFromParams, "UTF-8") but { error => callbackFromParams };
             match (validateSubscriptionChangeRequest(mode, topic, callback)) {
                 error err => {
@@ -95,7 +95,7 @@ service<http:Service> hubService {
 
             string secret = "";
             if (params.hasKey(PUBLISHER_SECRET)) {
-                secret = <string>params[PUBLISHER_SECRET];
+                secret = params[PUBLISHER_SECRET];
             }
             string errorMessage = registerTopicAtHub(topic, secret);
             if (errorMessage != "") {
@@ -118,7 +118,7 @@ service<http:Service> hubService {
 
             string secret = "";
             if (params.hasKey(PUBLISHER_SECRET)) {
-                secret = <string>params[PUBLISHER_SECRET];
+                secret = params[PUBLISHER_SECRET];
             }
             string errorMessage = unregisterTopicAtHub(topic, secret);
             if (errorMessage != "") {
@@ -133,8 +133,8 @@ service<http:Service> hubService {
         } else {
             if (mode != MODE_PUBLISH) {
                 params = request.getQueryParams();
-                mode = <string>params[HUB_MODE];
-                string topicFromParams = <string>params[HUB_TOPIC];
+                mode = params[HUB_MODE];
+                string topicFromParams = params[HUB_TOPIC];
                 topic = http:decode(topicFromParams, "UTF-8") but { error => topicFromParams };
             }
 
@@ -144,7 +144,7 @@ service<http:Service> hubService {
                     if (hubRemotePublishingMode == REMOTE_PUBLISHING_MODE_FETCH) {
                         match (fetchTopicUpdate(topic)) {
                             http:Response fetchResp => { reqJsonPayload = fetchResp.getJsonPayload(); }
-                            http:HttpConnectorError err => {
+                            error err => {
                                 log:printError("Error fetching updates for topic URL [" + topic + "]: " + err.message);
                                 response.statusCode = http:BAD_REQUEST_400;
                                 _ = client->respond(response);
@@ -236,20 +236,18 @@ documentation {
     P{{topic}} The topic specified in the new subscription/unsubscription request
     P{{params}} Parameters specified in the new subscription/unsubscription request
 }
-function verifyIntent(string callback, string topic, map params) {
+function verifyIntent(string callback, string topic, map<string> params) {
     endpoint http:Client callbackEp {
         url:callback,
         secureSocket:secureSocket
     };
 
-    string mode = <string>params[HUB_MODE];
+    string mode = params[HUB_MODE];
     int leaseSeconds;
 
     if (params.hasKey(HUB_LEASE_SECONDS)) {
-        match (<int>params[HUB_LEASE_SECONDS]) {
-            int extrLeaseSeconds => { leaseSeconds = extrLeaseSeconds; }
-            error => { leaseSeconds = 0; }
-        }
+        string strLeaseSeconds = params[HUB_LEASE_SECONDS];
+        leaseSeconds = <int>strLeaseSeconds but {error => 0};
     }
 
     //measured from the time the verification request was made from the hub to the subscriber from the recommendation
@@ -264,8 +262,11 @@ function verifyIntent(string callback, string topic, map params) {
 
     string queryParams = HUB_MODE + "=" + mode
         + "&" + HUB_TOPIC + "=" + topic
-        + "&" + HUB_CHALLENGE + "=" + challenge
-        + "&" + HUB_LEASE_SECONDS + "=" + leaseSeconds;
+        + "&" + HUB_CHALLENGE + "=" + challenge;
+
+    if (mode == MODE_SUBSCRIBE) {
+        queryParams = queryParams + "&" + HUB_LEASE_SECONDS + "=" + leaseSeconds;
+    }
 
     var subscriberResponse = callbackEp->get(untaint ("?" + queryParams), request = request);
 
@@ -278,12 +279,12 @@ function verifyIntent(string callback, string topic, map params) {
                         log:printInfo("Intent verification failed for mode: [" + mode + "], for callback URL: ["
                                 + callback + "]: Challenge not echoed correctly.");
                     } else {
-                        SubscriptionDetails subscriptionDetails = {topic:topic, callback:callback,
-                            leaseSeconds:leaseSeconds, createdAt:createdAt};
+                        SubscriptionDetails subscriptionDetails = {topic:topic, callback:callback};
                         if (mode == MODE_SUBSCRIBE) {
+                            subscriptionDetails.leaseSeconds = leaseSeconds * 1000;
+                            subscriptionDetails.createdAt = createdAt;
                             if (params.hasKey(HUB_SECRET)) {
-                                string secret = <string>params[HUB_SECRET];
-                                subscriptionDetails.secret = secret;
+                                subscriptionDetails.secret = params[HUB_SECRET];
                             }
                             addSubscription(subscriptionDetails);
                         } else {
@@ -303,7 +304,7 @@ function verifyIntent(string callback, string topic, map params) {
                 }
             }
         }
-        http:HttpConnectorError httpConnectorError => {
+        error httpConnectorError => {
             log:printInfo("Error sending intent verification request for callback URL: [" + callback
                     + "]: " + httpConnectorError.message);
         }
@@ -481,9 +482,9 @@ documentation {
 
     P{{topic}} The topic URL to be fetched to retrieve updates
     R{{}} `http:Response` indicating the response received on fetching the topic URL if successful,
-          `http:HttpConnectorError` if an HTTP error occurred
+          `error` if an HTTP error occurred
 }
-function fetchTopicUpdate(string topic) returns http:Response|http:HttpConnectorError {
+function fetchTopicUpdate(string topic) returns http:Response|error {
     endpoint http:Client topicEp {
         url:topic,
         secureSocket:secureSocket
@@ -543,7 +544,7 @@ function distributeContent(string callback, SubscriptionDetails subscriptionDeta
         var contentDistributionRequest = callbackEp->post("", request = request);
         match (contentDistributionRequest) {
             http:Response response => { return; }
-            http:HttpConnectorError err => { log:printError("Error delievering content to: " + callback); }
+            error err => { log:printError("Error delievering content to: " + callback); }
         }
     }
 }

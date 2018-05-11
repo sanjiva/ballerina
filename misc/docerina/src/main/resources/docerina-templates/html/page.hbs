@@ -6,7 +6,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="shortcut icon" href="docerina-theme/img/favicon.ico">
-    <title>Ballerina.io - API Docs</title>
+    <title>Ballerina - {{heading.value}} API Docs</title>
     <script src="docerina-theme/js/jquery-3.3.1.min.js"></script>
     <link rel="stylesheet" href="docerina-theme/css/bootstrap.min.css">
     <!-- Optional theme -->
@@ -25,6 +25,14 @@
     <link rel="stylesheet" href="docerina-theme/css/ballerina-io.css">
     <link rel="stylesheet" href="docerina-theme/css/ballerina-io-docs.css">
     <link rel="stylesheet" href="docerina-theme/css/ballerina-io-api.css">
+    <script type="text/javascript">
+        $(document).ready(function() {
+            if (typeof hljs === 'object') {
+                $('code.language-ballerina').addClass('ballerina');
+                hljs.initHighlighting();
+            }
+        });
+    </script>
     <script>
         var base_url = "";
     </script>
@@ -117,7 +125,7 @@
                                                 <li>
                                                     <a href="#PrimitivesSummary">
                                                         <div class="construct-icon">
-                                                            <span class="fw-variable"> </span>
+                                                            <span class="fw-primitive"> </span>
                                                         </div>
                                                         <div class="construct-name">
                                                             Primitives
@@ -129,7 +137,7 @@
                                                 <li>
                                                     <a href="#TypeDefinitions">
                                                         <div class="construct-icon">
-                                                            <span class="fw-constant"> </span>
+                                                            <span class="fw-type"> </span>
                                                         </div>
                                                         <div class="construct-name">
                                                             Type Definitions
@@ -272,7 +280,7 @@
                                             <!--Primitive Types-->
                                             {{#exists constructs "primitive"}}
                                                 <h2 id="PrimitivesSummary">
-                                                    <span class="fw-globe sm-icon"></span> Primitives Summary
+                                                    <span class="fw-primitive sm-icon"></span> Primitives Summary
                                                 </h2>
                                                 <table class="cPrimitive-summary-Table">
                                                     <tr>
@@ -292,7 +300,7 @@
                                             <!-- Type Definitions-->
                                             {{#exists constructs "type"}}
                                                 <h2 id="TypeDefinitions">
-                                                    <span class="fw-constant sm-icon"></span> Type Definitions
+                                                    <span class="fw-type sm-icon"></span> Type Definitions
                                                 </h2>
                                                 <table class="cSummary-Table">
                                                     <tr>
@@ -491,8 +499,8 @@
                                                                         {{#each parameters}}
                                                                             <tr>
                                                                                 <td class="cAPI-table-name">{{name}}</td>
-                                                                                <td class="cAPI-table-type"><a href="{{href}}">{{dataType}}</a></td>
-                                                                                <td class="cAPI-table-default"></td>
+                                                                                <td class="cAPI-table-type">{{{dataTypeLink dataType href}}}</td>
+                                                                                <td class="cAPI-table-default">{{defaultValue}}</td>
                                                                                 <td class="cAPI-table-desc">{{{description}}}</td>
                                                                             </tr>
                                                                         {{/each}}
@@ -509,7 +517,7 @@
                                                                         {{#each returnParams}}
                                                                             <tr>
                                                                                 <td class="cAPI-table-name"></td>
-                                                                                <td class="cAPI-table-type"><a href="{{href}}">{{dataType}}</a></td>
+                                                                                <td class="cAPI-table-type">{{{dataTypeLink dataType href}}}</td>
                                                                                 <td class="cAPI-table-default"></td>
                                                                                 <td class="cAPI-table-desc">{{{description}}}</td>
                                                                             </tr>
@@ -541,8 +549,8 @@
                                                         {{#each parameters}}
                                                             <tr>
                                                                 <td class="cAPI-table-name">{{name}}</td>
-                                                                <td class="cAPI-table-type"><a href="{{href}}">{{dataType}}</a></td>
-                                                                <td class="cAPI-table-default"></td>
+                                                                <td class="cAPI-table-type">{{{dataTypeLink dataType href}}}</td>
+                                                                <td class="cAPI-table-default">{{defaultValue}}</td>
                                                                 <td class="cAPI-table-desc">{{{description}}}</td>
                                                             </tr>
                                                         {{/each}}
@@ -559,7 +567,7 @@
                                                         {{#each returnParams}}
                                                             <tr>
                                                                 <td class="cAPI-table-name"></td>
-                                                                <td class="cAPI-table-type"><a href="{{href}}">{{dataType}}</a></td>
+                                                                <td class="cAPI-table-type">{{{dataTypeLink dataType href}}}</td>
                                                                 <td class="cAPI-table-default"></td>
                                                                 <td class="cAPI-table-desc">{{{description}}}</td>
                                                             </tr>
@@ -587,7 +595,7 @@
                                                         {{#each fields}}
                                                             <tr>
                                                                 <td class="cAPI-table-name">{{name}}</td>
-                                                                <td class="cAPI-table-type"><a href="{{href}}">{{dataType}}</a></td>
+                                                                <td class="cAPI-table-type">{{{dataTypeLink dataType href}}}</td>
                                                                 <td class="cAPI-table-default">{{defaultValue}}</td>
                                                                 <td class="cAPI-table-desc">{{{description}}}</td>
 
@@ -618,8 +626,8 @@
                                                                         {{#each parameters}}
                                                                             <tr>
                                                                                 <td class="cAPI-table-name">{{name}}</td>
-                                                                                <td class="cAPI-table-type"><a href="{{href}}">{{dataType}}</a></td>
-                                                                                <td class="cAPI-table-default"></td>
+                                                                                <td class="cAPI-table-type">{{{dataTypeLink dataType href}}}</td>
+                                                                                <td class="cAPI-table-default">{{defaultValue}}</td>
                                                                                 <td class="cAPI-table-desc">{{{description}}}</td>
                                                                             </tr>
                                                                         {{/each}}
@@ -636,7 +644,7 @@
                                                                         {{#each returnParams}}
                                                                             <tr>
                                                                                 <td class="cAPI-table-name"></td>
-                                                                                <td class="cAPI-table-type"><a href="{{href}}">{{dataType}}</a></td>
+                                                                                <td class="cAPI-table-type">{{{dataTypeLink dataType href}}}</td>
                                                                                 <td class="cAPI-table-default"></td>
                                                                                 <td class="cAPI-table-desc">{{{description}}}</td>
                                                                             </tr>
@@ -668,7 +676,7 @@
                                                         {{#each fields}}
                                                             <tr>
                                                                 <td class="cAPI-table-name">{{name}}</td>
-                                                                <td class="cAPI-table-type"><a href="{{href}}">{{dataType}}</a></td>
+                                                                <td class="cAPI-table-type">{{{dataTypeLink dataType href}}}</td>
                                                                 <td class="cAPI-table-default">{{defaultValue}}</td>
                                                                 <td class="cAPI-table-desc">{{{description}}}</td>
                                                             </tr>
@@ -700,8 +708,8 @@
                                                                         {{#each parameters}}
                                                                             <tr>
                                                                                 <td class="cAPI-table-name">{{name}}</td>
-                                                                                <td class="cAPI-table-type"><a href="{{href}}">{{dataType}}</a></td>
-                                                                                <td class="cAPI-table-default"></td>
+                                                                                <td class="cAPI-table-type">{{{dataTypeLink dataType href}}}</td>
+                                                                                <td class="cAPI-table-default">{{defaultValue}}</td>
                                                                                 <td class="cAPI-table-desc">{{{description}}}</td>
                                                                             </tr>
                                                                         {{/each}}
@@ -718,7 +726,7 @@
                                                                         {{#each returnParams}}
                                                                             <tr>
                                                                                 <td class="cAPI-table-name"></td>
-                                                                                <td class="cAPI-table-type"><a href="{{href}}">{{dataType}}</a></td>
+                                                                                <td class="cAPI-table-type">{{{dataTypeLink dataType href}}}</td>
                                                                                 <td class="cAPI-table-default"></td>
                                                                                 <td class="cAPI-table-desc">{{{description}}}</td>
                                                                             </tr>
@@ -750,7 +758,7 @@
                                                         {{#each fields}}
                                                             <tr>
                                                                 <td class="cAPI-table-name">{{name}}</td>
-                                                                <td class="cAPI-table-type"><a href="{{href}}">{{dataType}}</a></td>
+                                                                <td class="cAPI-table-type">{{{dataTypeLink dataType href}}}</td>
                                                                 <td class="cAPI-table-default">{{defaultValue}}</td>
                                                                 <td class="cAPI-table-desc">{{{description}}}</td>
                                                             </tr>
@@ -777,7 +785,7 @@
                                                         {{#each fields}}
                                                             <tr>
                                                                 <td class="cAPI-table-name">{{name}}</td>
-                                                                <td class="cAPI-table-type"><a href="{{href}}">{{dataType}}</a></td>
+                                                                <td class="cAPI-table-type">{{{dataTypeLink dataType href}}}</td>
                                                                 <td class="cAPI-table-default">{{defaultValue}}</td>
                                                                 <td class="cAPI-table-desc">{{{description}}}</td>
                                                             </tr>
@@ -809,8 +817,8 @@
                                                                         {{#each parameters}}
                                                                             <tr>
                                                                                 <td class="cAPI-table-name">{{name}}</td>
-                                                                                <td class="cAPI-table-type"><a href="{{href}}">{{dataType}}</a></td>
-                                                                                <td class="cAPI-table-default"></td>
+                                                                                <td class="cAPI-table-type">{{{dataTypeLink dataType href}}}</td>
+                                                                                <td class="cAPI-table-default">{{defaultValue}}</td>
                                                                                 <td class="cAPI-table-desc">{{{description}}}</td>
                                                                             </tr>
                                                                         {{/each}}
@@ -827,7 +835,7 @@
                                                                         {{#each returnParams}}
                                                                             <tr>
                                                                                 <td class="cAPI-table-name"></td>
-                                                                                <td class="cAPI-table-type"><a href="{{href}}">{{dataType}}</a></td>
+                                                                                <td class="cAPI-table-type">{{{dataTypeLink dataType href}}}</td>
                                                                                 <td class="cAPI-table-default"></td>
                                                                                 <td class="cAPI-table-desc">{{{description}}}</td>
                                                                             </tr>

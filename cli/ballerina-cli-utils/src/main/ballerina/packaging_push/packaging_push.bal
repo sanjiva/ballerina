@@ -4,35 +4,26 @@ import ballerina/mime;
 import ballerina/http;
 
 documentation {
-    Function to pull a package from ballerina central.
+    This functions pulls a package from ballerina central.
 
-    P{{accessToken}} - The access token.
-    P{{mdFileContent}} - The Package.md file content of the package.
-    P{{summary}} - The summary of the package.
-    P{{homePageURL}} - The website URL of the package.
-    P{{repositoryURL}} - The source code URL of the package.
-    P{{apiDocURL}} - The api documentation URL of the package.
-    P{{authors}} - The authors of the package.
-    P{{keywords}} - The keywords which describes the package.
-    P{{license}} - The license of the package.
-    P{{url}} - The url to be invoked to push the package.
-    P{{dirPath}} - The directory path where the archived package resides.
-    P{{msg}} - The message printed when the package is pushed successfully which includes package info.
+    P{{definedEndpoint}} Endpoint defined with the proxy configurations
+    P{{accessToken}} Access token
+    P{{mdFileContent}} Package.md file content of the package
+    P{{summary}} Summary of the package
+    P{{homePageURL}} Website URL of the package
+    P{{repositoryURL}} Source code URL of the package
+    P{{apiDocURL}} API documentation URL of the package
+    P{{authors}} Authors of the package
+    P{{keywords}} Keywords which describes the package
+    P{{license}} License of the package
+    P{{url}} URL to be invoked to push the package
+    P{{dirPath}} Directory path where the archived package resides
+    P{{msg}} Message printed when the package is pushed successfully which includes package info
 }
-function pushPackage (string accessToken, string mdFileContent, string summary, string homePageURL, string repositoryURL,
-    string apiDocURL, string authors, string keywords, string license, string url, string dirPath, string msg) {
-    endpoint http:Client httpEndpoint {
-        url:url,
-        secureSocket:{
-            trustStore:{
-                path:"${ballerina.home}/bre/security/ballerinaTruststore.p12",
-                password:"ballerina"
-            },
-            verifyHostname:false,
-            shareSession:true
-        }
-    };
-
+function pushPackage (http:Client definedEndpoint, string accessToken, string mdFileContent, string summary, string homePageURL, string repositoryURL,
+                string apiDocURL, string authors, string keywords, string license, string url, string dirPath, string msg) {
+    
+    endpoint http:Client httpEndpoint = definedEndpoint;
     mime:Entity mdFileContentBodyPart = addStringBodyParts("description", mdFileContent);
     mime:Entity summaryBodyPart = addStringBodyParts("summary", summary);
     mime:Entity homePageURLBodyPart = addStringBodyParts("websiteURL", homePageURL);
@@ -59,7 +50,7 @@ function pushPackage (string accessToken, string mdFileContent, string summary, 
     match result {
         http:Response response => httpResponse = response;
         error e => {
-            io:println("Connection to the remote host failed : " + e.message);
+            io:println("connection to the remote host failed : " + e.message);
             return;
         }
     }
@@ -76,17 +67,80 @@ function pushPackage (string accessToken, string mdFileContent, string summary, 
 }
 
 documentation {
-    Main function which invokes the method to push the package.
+    This function will invoke the method to push the package.
 }
 function main (string... args) {
-    pushPackage(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11]);
+    http:Client httpEndpoint;
+    string host = args[12];
+    string port = args[13];
+    if (host != "" && port != "") {
+        try {
+          httpEndpoint = defineEndpointWithProxy(args[9], host, port, args[14], args[15]);
+        } catch (error err) {
+          io:println("failed to resolve host : " + host + " with port " + port);
+          return;
+        }
+    } else  if (host != "" || port != "") {
+        io:println("both host and port should be provided to enable proxy");     
+        return;   
+    } else {
+        httpEndpoint = defineEndpointWithoutProxy(args[9]);
+    }        
+    pushPackage(httpEndpoint, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11]);    
 }
 
 documentation {
-    Function to get the content disposition of the form data sent.
+    This function defines an endpoint with proxy configurations.
 
-    P{{partName}} - The multipart name.
-    R{{}} - `ContentDisposition`
+    P{{url}} URL to be invoked
+    P{{hostname}} Host name of the proxy
+    P{{port}} Port of the proxy
+    P{{username}} Username of the proxy
+    P{{password}} Password of the proxy
+    R{{}} Endpoint defined
+}
+function defineEndpointWithProxy (string url, string hostname, string port, string username, string password) returns http:Client{
+    endpoint http:Client httpEndpoint {
+        url: url,
+        secureSocket:{
+            trustStore:{
+                path: "${ballerina.home}/bre/security/ballerinaTruststore.p12",
+                password: "ballerina"
+            },
+            verifyHostname: false,
+            shareSession: true
+        },
+            proxy : getProxyConfigurations(hostname, port, username, password)
+    };
+    return httpEndpoint;
+}
+
+documentation {
+    This function defines an endpoint without proxy configurations.
+
+    P{{url}} URL to be invoked
+    R{{}} Endpoint defined
+}
+function defineEndpointWithoutProxy (string url) returns http:Client{
+    endpoint http:Client httpEndpoint {
+        url: url,
+        secureSocket:{
+            trustStore:{
+                path: "${ballerina.home}/bre/security/ballerinaTruststore.p12",
+                password: "ballerina"
+            },
+            verifyHostname: false,
+            shareSession: true
+        }
+    };
+    return httpEndpoint;
+}
+
+documentation {
+    This function will get the content disposition of the form data sent.
+
+    P{{partName}} Multipart name
+    R{{}} `ContentDisposition` of the multipart
 }
 function getContentDispositionForFormData(string partName) returns (mime:ContentDisposition){
     mime:ContentDisposition contentDisposition = new;
@@ -96,11 +150,11 @@ function getContentDispositionForFormData(string partName) returns (mime:Content
 }
 
 documentation {
-    Function to add string part information in multiparts.
+    This function will add string part information in multiparts.
 
-    P{{key}} - The name of the multipart.
-    P{{value}} - The string value to be included in the multipart.
-    R{{}} - `Entity` Mime entity with the part information.
+    P{{key}} Name of the multipart
+    P{{value}} String value to be included in the multipart
+    R{{}} `Entity` with the part information.
 }
 function addStringBodyParts (string key, string value) returns (mime:Entity) {
     mime:Entity stringBodyPart = new;
@@ -108,4 +162,19 @@ function addStringBodyParts (string key, string value) returns (mime:Entity) {
     stringBodyPart.setText(value);
     stringBodyPart.setContentType(mime:TEXT_PLAIN);
     return stringBodyPart;
+}
+
+documentation {
+    This function sets the proxy configurations for the endpoint.
+
+    P{{hostName}} Host name of the proxy
+    P{{port}} Port of the proxy
+    P{{username}} Username of the proxy
+    P{{password}} Password of the proxy
+    R{{}} Proxy configurations for the endpoint
+}
+function getProxyConfigurations(string hostName, string port, string username, string password) returns http:ProxyConfig {
+    int portInt = check <int> port;
+    http:ProxyConfig proxy = { host : hostName, port : portInt , userName: username, password : password };
+    return proxy;
 }

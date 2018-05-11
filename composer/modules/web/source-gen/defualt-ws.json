@@ -269,6 +269,12 @@
     "before }": "",
     "after }": ""
   },
+  "Done": {
+    "before done": "",
+    "after done": "",
+    "before ;": "",
+    "after ;": ""
+  },
   "ElvisExpr": {
     "before leftExpression": "",
     "after leftExpression": "",
@@ -467,6 +473,18 @@
     "before ]": "",
     "after ]": ""
   },
+  "IntRangeExpr": {
+    "before [": " ",
+    "after [": "",
+    "before (": "",
+    "after (": "",
+    "before ..": "",
+    "after ..": "",
+    "before )": "",
+    "after )": "",
+    "before ]": "",
+    "after ]": ""
+  },
   "Invocation": {
     "before start": "",
     "after start": " ",
@@ -490,6 +508,12 @@
   "Lambda": {
     "before functionNode": "",
     "after functionNode": ""
+  },
+  "Limit": {
+    "before limit": " ",
+    "after limit": "",
+    "before limitValue": " ",
+    "after limitValue": ""
   },
   "Literal": {
     "before unescapedValue": "",
@@ -530,8 +554,8 @@
     "after }": ""
   },
   "MatchExpression": {
-    "before expr":"",
-    "after expr": " ",
+    "before expression":"",
+    "after expression": " ",
     "before but": "",
     "after but": " ",
     "before {": "",
@@ -587,11 +611,35 @@
     "before }":"",
     "after }": ""
   },
+  "OrderBy": {
+    "before order": "",
+    "after order": "",
+    "before by":"",
+    "after by": ""
+  },
+  "OrderByVariable": {
+    "before orderByType": " ",
+    "after orderByType": ""
+  },
   "PostIncrement": {
     "before variable": "",
     "after variable": "",
     "before operator": "",
     "after operator": "",
+    "before ;": "",
+    "after ;": ""
+  },
+  "Record": {
+    "before type": "",
+    "after type": " ",
+    "before name": "",
+    "after name": " ",
+    "before {": "",
+    "after {": "",
+    "before fields": "",
+    "after fields": "",
+    "before }": "",
+    "after }": "",
     "before ;": "",
     "after ;": ""
   },
@@ -646,8 +694,6 @@
   "Retry": {
     "before retry": "",
     "after retry": "",
-    "before count": " ",
-    "after count": "",
     "before ;": "",
     "after ;": ""
   },
@@ -726,6 +772,14 @@
   "Table": {
     "before table": "",
     "after table": ""
+  },
+  "TableQuery": {
+    "before from": "",
+    "after from": ""
+  },
+  "TableQueryExpression": {
+    "before tableQuery": "",
+    "after tableQuery": ""
   },
   "TernaryExpr": {
     "before condition": "",
@@ -936,10 +990,10 @@
     "after typeKind": ""
   },
   "Variable": {
-    "before typeNode": "",
-    "after typeNode": "",
+    "before endpoint": "",
+    "after endpoint": "",
     "before name": " ",
-    "after name": "",
+    "after name": " ",
     "before {": "",
     "after {": "",
     "before initialExpression": "",

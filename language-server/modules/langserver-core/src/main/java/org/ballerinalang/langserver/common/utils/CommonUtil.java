@@ -21,9 +21,11 @@ import org.ballerinalang.langserver.common.UtilSymbolKeys;
 import org.ballerinalang.langserver.compiler.DocumentServiceKeys;
 import org.ballerinalang.langserver.compiler.LSServiceOperationContext;
 import org.ballerinalang.langserver.compiler.common.LSDocument;
+import org.ballerinalang.langserver.compiler.common.modal.BallerinaPackage;
 import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManager;
 import org.ballerinalang.langserver.completions.CompletionKeys;
 import org.ballerinalang.langserver.completions.SymbolInfo;
+import org.ballerinalang.langserver.completions.util.CompletionUtil;
 import org.ballerinalang.langserver.completions.util.ItemResolverConstants;
 import org.ballerinalang.langserver.completions.util.Snippet;
 import org.ballerinalang.model.elements.PackageID;
@@ -282,11 +284,10 @@ public class CommonUtil {
     public static String topLevelNodeTypeInLine(TextDocumentIdentifier identifier, Position startPosition,
                                                 WorkspaceDocumentManager docManager) {
         // TODO: Need to support service and resources as well.
-        List<String> topLevelKeywords = Arrays.asList("function", "service", "resource", "struct", "enum",
-                                                      "transformer", "object");
+        List<String> topLevelKeywords = Arrays.asList("function", "service", "resource", "endpoint", "type");
         LSDocument document = new LSDocument(identifier.getUri());
         String fileContent = docManager.getFileContent(getPath(document));
-        String[] splitedFileContent = fileContent.split("\\n|\\r\\n|\\r");
+        String[] splitedFileContent = fileContent.split(LINE_SEPARATOR);
         if ((splitedFileContent.length - 1) >= startPosition.getLine()) {
             String lineContent = splitedFileContent[startPosition.getLine()];
             List<String> alphaNumericTokens = new ArrayList<>(Arrays.asList(lineContent.split("[^\\w']+")));
@@ -476,10 +477,19 @@ public class CommonUtil {
     public static ArrayList<SymbolInfo> invocationsAndFieldsOnIdentifier(LSServiceOperationContext context,
                                                                          int delimiterIndex) {
         ArrayList<SymbolInfo> actionFunctionList = new ArrayList<>();
+        String lineSegment = context.get(CompletionKeys.CURRENT_LINE_SEGMENT_KEY);
+        String variableName;
+        String delimiter;
         TokenStream tokenStream = context.get(DocumentServiceKeys.TOKEN_STREAM_KEY);
+        if (tokenStream == null) {
+            variableName = CompletionUtil.getPreviousTokenFromLineSegment(lineSegment, delimiterIndex);
+            delimiter = CompletionUtil.getDelimiterTokenFromLineSegment(context, lineSegment);
+        } else {
+            variableName = CommonUtil.getPreviousDefaultToken(tokenStream, delimiterIndex).getText();
+            delimiter = tokenStream.get(delimiterIndex).getText();
+        }
         List<SymbolInfo> symbols = context.get(CompletionKeys.VISIBLE_SYMBOLS_KEY);
         SymbolTable symbolTable = context.get(DocumentServiceKeys.SYMBOL_TABLE_KEY);
-        String variableName = CommonUtil.getPreviousDefaultToken(tokenStream, delimiterIndex).getText();
         SymbolInfo variable = CommonUtil.getVariableByName(variableName, symbols);
         String builtinPkgName = symbolTable.builtInPackageSymbol.pkgID.name.getValue();
         Map<Name, Scope.ScopeEntry> entries = new HashMap<>();
@@ -496,7 +506,7 @@ public class CommonUtil {
         if (variable.getScopeEntry().symbol instanceof BEndpointVarSymbol) {
             BType getClientFuncType = ((BEndpointVarSymbol) variable.getScopeEntry().symbol)
                     .getClientFunction.type;
-            if (!UtilSymbolKeys.ACTION_INVOCATION_SYMBOL_KEY.equals(tokenStream.get(delimiterIndex).getText())
+            if (!UtilSymbolKeys.ACTION_INVOCATION_SYMBOL_KEY.equals(delimiter)
                     || !(getClientFuncType instanceof BInvokableType)) {
                 return actionFunctionList;
             }
@@ -585,6 +595,16 @@ public class CommonUtil {
         }
         
         return false;
+    }
+
+    /**
+     * Check whether the packages list contains a given package.
+     * @param pkg               Package to check
+     * @param pkgList           List of packages to check against
+     * @return {@link Boolean}  Check status of the package
+     */
+    public static boolean listContainsPackage(String pkg, List<BallerinaPackage> pkgList) {
+        return pkgList.stream().anyMatch(ballerinaPackage -> ballerinaPackage.getFullPackageNameAlias().equals(pkg));
     }
 
     private static void populateIterableOperations(SymbolInfo variable, List<SymbolInfo> symbolInfoList) {

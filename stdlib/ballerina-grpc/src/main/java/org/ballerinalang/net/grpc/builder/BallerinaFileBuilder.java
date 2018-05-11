@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2017, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  WSO2 Inc. licenses this file to you under the Apache License,
  *  Version 2.0 (the "License"); you may not use this file except
@@ -156,9 +156,9 @@ public class BallerinaFileBuilder {
                 methodName = methodDescriptorProto.getName();
                 if (!EMPTY_STRING.equals(fileDescriptorSet.getPackage())) {
                     methodID = fileDescriptorSet.getPackage() + PACKAGE_SEPARATOR + fileDescriptorSet
-                            .getService(SERVICE_INDEX).getName() + FILE_SEPARATOR + methodName;
+                            .getService(SERVICE_INDEX).getName() + "/" + methodName;
                 } else {
-                    methodID = fileDescriptorSet.getService(SERVICE_INDEX).getName() + FILE_SEPARATOR + methodName;
+                    methodID = fileDescriptorSet.getService(SERVICE_INDEX).getName() + "/" + methodName;
                 }
                 reqMessageName = getMappingBalType(typeIn);
                 resMessageName = getMappingBalType(typeOut);

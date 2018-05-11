@@ -48,6 +48,7 @@ import org.wso2.ballerinalang.compiler.semantics.model.SymbolTable;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BAnnotationAttributeSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BAnnotationSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BEndpointVarSymbol;
+import org.wso2.ballerinalang.compiler.semantics.model.symbols.BInvokableSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BOperatorSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BPackageSymbol;
 import org.wso2.ballerinalang.compiler.semantics.model.symbols.BServiceSymbol;
@@ -425,6 +426,12 @@ public class SemanticAnalyzer extends BLangNodeVisitor {
             }
             Name attributeName = names.fromIdNode(attribute.documentationField);
             BSymbol attributeSymbol = this.env.scope.lookup(attributeName).symbol;
+            if (attributeSymbol == null && this.env.enclObject != null) {
+                // check whether the parameter is an inherited one
+                String originalParam = this.env.enclObject.getName().getValue() + "." + attribute.documentationField
+                        .getValue();
+                attributeSymbol = this.env.scope.lookup(names.fromString(originalParam)).symbol;
+            }
             if (attributeSymbol == null) {
                 this.dlog.warning(attribute.pos, DiagnosticCode.NO_SUCH_DOCUMENTABLE_ATTRIBUTE,
                         attribute.documentationField, attribute.docTag.getValue());
@@ -1023,11 +1030,19 @@ public class SemanticAnalyzer extends BLangNodeVisitor {
 
         if (transactionNode.onCommitFunction != null) {
             typeChecker.checkExpr(transactionNode.onCommitFunction, env, symTable.noType);
+            if (transactionNode.onCommitFunction.type.tag == TypeTags.INVOKABLE) {
+                ((BInvokableSymbol) ((BLangSimpleVarRef) transactionNode.onCommitFunction).symbol)
+                        .isTransactionHandler = true;
+            }
             checkTransactionHandlerValidity(transactionNode.onCommitFunction);
         }
 
         if (transactionNode.onAbortFunction != null) {
             typeChecker.checkExpr(transactionNode.onAbortFunction, env, symTable.noType);
+            if (transactionNode.onAbortFunction.type.tag == TypeTags.INVOKABLE) {
+                ((BInvokableSymbol) ((BLangSimpleVarRef) transactionNode.onAbortFunction).symbol)
+                        .isTransactionHandler = true;
+            }
             checkTransactionHandlerValidity(transactionNode.onAbortFunction);
         }
     }
@@ -1346,9 +1361,21 @@ public class SemanticAnalyzer extends BLangNodeVisitor {
             ((BLangWhere) beforeWhereNode).accept(this);
         }
 
+        List<ExpressionNode> preInvocations = streamingInput.getPreFunctionInvocations();
+        if (preInvocations != null) {
+            preInvocations.stream().map(expr -> (BLangExpression) expr)
+                    .forEach(expression -> expression.accept(this));
+        }
+
         WindowClauseNode windowClauseNode = streamingInput.getWindowClause();
         if (windowClauseNode != null) {
             ((BLangWindow) windowClauseNode).accept(this);
+        }
+
+        List<ExpressionNode> postInvocations = streamingInput.getPostFunctionInvocations();
+        if (postInvocations != null) {
+            postInvocations.stream().map(expressionNode -> (BLangExpression) expressionNode)
+                    .forEach(expression -> expression.accept(this));
         }
 
         WhereNode afterWhereNode = streamingInput.getAfterStreamingCondition();
@@ -1661,6 +1688,10 @@ public class SemanticAnalyzer extends BLangNodeVisitor {
 
     private void checkTransactionHandlerValidity(BLangExpression transactionHanlder) {
         if (transactionHanlder != null) {
+            BSymbol handlerSymbol = ((BLangSimpleVarRef) transactionHanlder).symbol;
+            if (handlerSymbol != null && handlerSymbol.kind != SymbolKind.FUNCTION) {
+                dlog.error(transactionHanlder.pos, DiagnosticCode.INVALID_FUNCTION_POINTER_ASSIGNMENT_FOR_HANDLER);
+            }
             if (transactionHanlder.type.tag == TypeTags.INVOKABLE) {
                 BInvokableType handlerType = (BInvokableType) transactionHanlder.type;
                 int parameterCount = handlerType.paramTypes.size();
@@ -1669,6 +1700,9 @@ public class SemanticAnalyzer extends BLangNodeVisitor {
                 }
                 if (handlerType.paramTypes.get(0).tag != TypeTags.STRING) {
                     dlog.error(transactionHanlder.pos, DiagnosticCode.INVALID_TRANSACTION_HANDLER_ARGS);
+                }
+                if (handlerType.retType.tag != TypeTags.NIL) {
+                    dlog.error(transactionHanlder.pos, DiagnosticCode.INVALID_TRANSACTION_HANDLER_SIGNATURE);
                 }
             } else {
                 dlog.error(transactionHanlder.pos, DiagnosticCode.LAMBDA_REQUIRED_FOR_TRANSACTION_HANDLER);

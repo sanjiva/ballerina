@@ -46,7 +46,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.ballerinalang.net.grpc.MessageUtils.setNestedMessages;
-import static org.ballerinalang.net.grpc.builder.utils.BalGenConstants.FILE_SEPARATOR;
 
 /**
  * This is the gRPC server implementation for registering service and start/stop server.
@@ -100,11 +99,6 @@ public class GrpcServicesBuilder {
     
     private static ServerServiceDefinition getServiceDefinition(Service service) throws GrpcServerException {
         Descriptors.FileDescriptor fileDescriptor = ServiceProtoUtils.getDescriptor(service);
-        if (fileDescriptor == null) {
-            throw new GrpcServerException("Error while reading the service descriptor. Service file definition not " +
-                    "found");
-        }
-
         Descriptors.ServiceDescriptor serviceDescriptor = fileDescriptor.findServiceByName(service.getName());
         return getServiceDefinition(service, serviceDescriptor);
     }
@@ -122,7 +116,7 @@ public class GrpcServicesBuilder {
         Builder serviceDefBuilder = ServerServiceDefinition.builder(serviceName);
         
         for (Descriptors.MethodDescriptor methodDescriptor : serviceDescriptor.getMethods()) {
-            final String methodName = serviceName + FILE_SEPARATOR + methodDescriptor.getName();
+            final String methodName = serviceName + "/" + methodDescriptor.getName();
             Descriptors.Descriptor requestDescriptor = serviceDescriptor.findMethodByName(methodDescriptor.getName())
                     .getInputType();
             Descriptors.Descriptor responseDescriptor = serviceDescriptor.findMethodByName(methodDescriptor.getName())
@@ -190,14 +184,15 @@ public class GrpcServicesBuilder {
             GrpcServerException {
 
         if (serverBuilder == null) {
-            throw new GrpcServerException("Error while starting gRPC server, client responder builder is null");
+            throw new GrpcServerException("Error occurred while starting gRPC server. Please check server " +
+                    "configurations");
         }
         Server server = serverBuilder.build();
         if (server != null) {
             try {
                 server.start();
             } catch (IOException e) {
-                throw new GrpcServerException(e);
+                throw new GrpcServerException("Failed to start gRPC server. " + e.getMessage(), e);
             }
         } else {
             throw new GrpcServerException("No gRPC service is registered to Start" +

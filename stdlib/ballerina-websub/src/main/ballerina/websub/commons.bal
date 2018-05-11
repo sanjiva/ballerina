@@ -14,47 +14,118 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/crypto;
 import ballerina/http;
 import ballerina/log;
 import ballerina/mime;
-import ballerina/crypto;
+import ballerina/reflect;
 
-@final public string HUB_CHALLENGE = "hub.challenge";
-@final public string HUB_MODE = "hub.mode";
-@final public string HUB_TOPIC = "hub.topic";
-@final public string HUB_CALLBACK = "hub.callback";
-@final public string HUB_LEASE_SECONDS = "hub.lease_seconds";
-@final public string HUB_SECRET = "hub.secret";
+documentation {
+    Intent verification request parameter `hub.challenge` representing the challenge that needs to be echoed by
+    susbscribers to verify intent.
+}
+@final string HUB_CHALLENGE = "hub.challenge";
 
-@final public string MODE_SUBSCRIBE = "subscribe";
-@final public string MODE_UNSUBSCRIBE = "unsubscribe";
-@final public string MODE_PUBLISH = "publish";
-@final public string MODE_REGISTER = "register";
-@final public string MODE_UNREGISTER = "unregister";
-@final public string PUBLISHER_SECRET = "publisher.secret";
-@final public string REMOTE_PUBLISHING_MODE_DIRECT = "direct";
-@final public string REMOTE_PUBLISHING_MODE_FETCH = "fetch";
+documentation {
+    Parameter `hub.mode` representing the mode of the request from hub to subscriber or subscriber to hub.
+}
+@final string HUB_MODE = "hub.mode";
 
-@final public string X_HUB_UUID = "X-Hub-Uuid";
-@final public string X_HUB_TOPIC = "X-Hub-Topic";
-@final public string X_HUB_SIGNATURE = "X-Hub-Signature";
-@final public string PUBLISHER_SIGNATURE = "Publisher-Signature";
+documentation {
+    Subscription change or intent verification request parameter `hub.topic` representing the topic relevant to the for
+    which the request is initiated.
+}
+@final string HUB_TOPIC = "hub.topic";
 
-@final public string CONTENT_TYPE = "Content-Type";
-@final public string SHA1 = "SHA1";
-@final public string SHA256 = "SHA256";
-@final public string MD5 = "MD5";
+documentation {
+    Subscription change request parameter `hub.callback` representing the callback to which notification should happen.
+}
+@final string HUB_CALLBACK = "hub.callback";
 
-public type TopicIdentifier "TOPIC_ID_HEADER"|"TOPIC_ID_PAYLOAD_KEY"|"TOPIC_ID_HEADER_AND_PAYLOAD";
-@final public TopicIdentifier TOPIC_ID_HEADER = "TOPIC_ID_HEADER";
-@final public TopicIdentifier TOPIC_ID_PAYLOAD_KEY = "TOPIC_ID_PAYLOAD_KEY";
-@final public TopicIdentifier TOPIC_ID_HEADER_AND_PAYLOAD = "TOPIC_ID_HEADER_AND_PAYLOAD";
+documentation {
+    Subscription request parameter `hub.lease_seconds` representing the period for which the subscription is expected to
+     be active.
+}
+@final string HUB_LEASE_SECONDS = "hub.lease_seconds";
+
+documentation {
+    Subscription parameter `hub.secret` representing the secret key to use for authenticated content distribution.
+}
+@final string HUB_SECRET = "hub.secret";
+
+documentation {
+    `hub.mode` value indicating "subscription" mode, to subscribe to updates for a topic.
+}
+@final string MODE_SUBSCRIBE = "subscribe";
+
+documentation {
+    `hub.mode` value indicating "unsubscription" mode, to unsubscribe to updates for a topic.
+}
+@final string MODE_UNSUBSCRIBE = "unsubscribe";
+
+documentation {
+    `hub.mode` value indicating "publish" mode, used by a publisher to notify an update to a topic.
+}
+@final string MODE_PUBLISH = "publish";
+
+documentation {
+    `hub.mode` value indicating "register" mode, used by a publisher to register a topic at a hub.
+}
+@final string MODE_REGISTER = "register";
+
+documentation {
+    `hub.mode` value indicating "unregister" mode, used by a publisher to unregister a topic at a hub.
+}
+@final string MODE_UNREGISTER = "unregister";
+
+documentation {
+    Topic registration parameter `publisher.secret` indicating a secret specified by a publisher when registering a
+    topic at the hub, to use for authenticated content delivery between publisher and hub.
+}
+@final string PUBLISHER_SECRET = "publisher.secret";
+@final string REMOTE_PUBLISHING_MODE_DIRECT = "direct";
+@final string REMOTE_PUBLISHING_MODE_FETCH = "fetch";
+
+@final string X_HUB_UUID = "X-Hub-Uuid";
+@final string X_HUB_TOPIC = "X-Hub-Topic";
+@final string X_HUB_SIGNATURE = "X-Hub-Signature";
+@final string PUBLISHER_SIGNATURE = "Publisher-Signature";
+
+@final string CONTENT_TYPE = "Content-Type";
+@final string SHA1 = "SHA1";
+@final string SHA256 = "SHA256";
+@final string MD5 = "MD5";
+
+@final string ANN_NAME_WEBSUB_SUBSCRIBER_SERVICE_CONFIG = "SubscriberServiceConfig";
+@final string WEBSUB_PACKAGE_NAME = "ballerina.websub";
+
+//TODO: Make public once extension story is finalized.
+documentation {
+    The identifier to be used to identify the topic for dispatching with custom subscriber services.
+}
+type TopicIdentifier "TOPIC_ID_HEADER"|"TOPIC_ID_PAYLOAD_KEY"|"TOPIC_ID_HEADER_AND_PAYLOAD";
+
+documentation {
+    `TopicIdentifier` indicating dispatching based solely on a header of the request.
+}
+@final TopicIdentifier TOPIC_ID_HEADER = "TOPIC_ID_HEADER";
+
+documentation {
+    `TopicIdentifier` indicating dispatching based solely on a value for a key in the JSON payload of the request.
+}
+@final TopicIdentifier TOPIC_ID_PAYLOAD_KEY = "TOPIC_ID_PAYLOAD_KEY";
+
+documentation {
+    `TopicIdentifier` indicating dispatching based on a combination of header and values specified for a key/key(s) in
+    the JSON payload of the request.
+}
+@final TopicIdentifier TOPIC_ID_HEADER_AND_PAYLOAD = "TOPIC_ID_HEADER_AND_PAYLOAD";
 
 ///////////////////////////////////////////////////////////////////
 //////////////////// WebSub Subscriber Commons ////////////////////
 ///////////////////////////////////////////////////////////////////
 documentation {
-    Object representing and intent verification request received.
+    Object representing an intent verification request received.
 
     F{{mode}} The mode specified whether intent is being verified for subscription or unsubscription
     F{{topic}} The for which intent is being verified for subscription or unsubscription
@@ -74,7 +145,7 @@ public type IntentVerificationRequest object {
     }
 
     documentation {
-        Function to build intent verification response for subscription requests sent.
+        Builds the response for the request, verifying intention to subscribe, if the topic matches that expected.
 
         P{{topic}} The topic for which subscription should be accepted, if not specified the annotated topic will be
                     used
@@ -83,7 +154,7 @@ public type IntentVerificationRequest object {
     public function buildSubscriptionVerificationResponse(string? topic = ()) returns http:Response;
 
     documentation {
-        Function to build intent verification response for unsubscription requests sent.
+        Builds the response for the request, verifying intention to unsubscribe, if the topic matches that expected.
 
         P{{topic}} The topic for which unsubscription should be accepted, if not specified the annotated topic will be
                     used
@@ -96,23 +167,15 @@ public type IntentVerificationRequest object {
 public function IntentVerificationRequest::buildSubscriptionVerificationResponse(string? topic = ())
     returns http:Response {
 
-    SubscriberServiceConfiguration subscriberServiceConfiguration = {};
-    match (topic) {
-        string specifiedTopic => { subscriberServiceConfiguration = {topic:specifiedTopic}; }
-        () => { subscriberServiceConfiguration = retrieveAnnotations(); }
-    }
-    return buildIntentVerificationResponse(self, MODE_SUBSCRIBE, subscriberServiceConfiguration);
+    string intendedTopic = topic but {() => retrieveIntendedTopic()};
+    return buildIntentVerificationResponse(self, MODE_SUBSCRIBE, intendedTopic);
 }
 
 public function IntentVerificationRequest::buildUnsubscriptionVerificationResponse(string? topic = ())
     returns http:Response {
 
-    SubscriberServiceConfiguration subscriberServiceConfiguration = {};
-    match (topic) {
-        string specifiedTopic => { subscriberServiceConfiguration = {topic:specifiedTopic}; }
-        () => { subscriberServiceConfiguration = retrieveAnnotations(); }
-    }
-    return buildIntentVerificationResponse(self, MODE_UNSUBSCRIBE, subscriberServiceConfiguration);
+    string intendedTopic = topic but {() => retrieveIntendedTopic()};
+    return buildIntentVerificationResponse(self, MODE_UNSUBSCRIBE, intendedTopic);
 }
 
 documentation {
@@ -120,28 +183,22 @@ documentation {
 
     P{{intentVerificationRequest}} The intent verification request from the hub
     P{{mode}} The mode (subscription/unsubscription) for which a request was sent
-    P{{webSubSubscriberAnnotations}} The SubscriberServiceConfiguration containing topic details
+    P{{topic}} The intended topic for which subscription change should be verified
     R{{}} `http:Response` The response to the hub verifying/denying intent to subscripe/unsubscribe
 }
 function buildIntentVerificationResponse(IntentVerificationRequest intentVerificationRequest, string mode,
-                                         SubscriberServiceConfiguration webSubSubscriberAnnotations)
+                                         string topic)
     returns http:Response {
 
     http:Response response = new;
-    string topic = webSubSubscriberAnnotations.topic;
+    string reqTopic = check http:decode(intentVerificationRequest.topic, "UTF-8");
     if (topic == "") {
         response.statusCode = http:NOT_FOUND_404;
-        log:printError("Intent Verification denied - Mode [" + mode + "], Topic [" + topic +
+        log:printError("Intent Verification denied - Mode [" + mode + "], Topic [" + reqTopic +
                 "], since topic unavailable as an annotation or unspecified as a parameter");
     } else {
         string reqMode = intentVerificationRequest.mode;
         string challenge = intentVerificationRequest.challenge;
-        string reqTopic = intentVerificationRequest.topic;
-
-        match (http:decode(reqTopic, "UTF-8")) {
-            string decodedTopic => reqTopic = decodedTopic;
-            error => {}
-        }
 
         string reqLeaseSeconds = <string>intentVerificationRequest.leaseSeconds;
 
@@ -152,7 +209,7 @@ function buildIntentVerificationResponse(IntentVerificationRequest intentVerific
                     + reqLeaseSeconds + "]");
         } else {
             response.statusCode = http:NOT_FOUND_404;
-            log:printWarn("Intent Verification denied - Mode [" + mode + "], Topic [" + topic + "]");
+            log:printWarn("Intent Verification denied - Mode [" + mode + "], Topic [" + reqTopic + "]");
         }
     }
     return response;
@@ -166,7 +223,12 @@ documentation {
     R{{}} `error`, if an error occurred in extraction or signature validation failed
 }
 function processWebSubNotification(http:Request request, typedesc serviceType) returns error? {
-    string secret = retrieveSecret(serviceType);
+    string secret;
+    match (retrieveSubscriberServiceAnnotations(serviceType)) {
+        SubscriberServiceConfiguration subscriberServiceAnnotation => { secret = subscriberServiceAnnotation.secret; }
+        () => { log:printDebug("WebSub notification received for subscription with no secret specified"); }
+    }
+
     string xHubSignature;
 
     if (request.hasHeader(X_HUB_SIGNATURE)) {
@@ -208,7 +270,7 @@ documentation {
     P{{secret}} The secret used when subscribing
     R{{}} `error` if an error occurs validating the signature or the signature is invalid
 }
-public function validateSignature(string xHubSignature, string stringPayload, string secret) returns error? {
+function validateSignature(string xHubSignature, string stringPayload, string secret) returns error? {
 
     string[] splitSignature = xHubSignature.split("=");
     string method = splitSignature[0];
@@ -234,9 +296,9 @@ public function validateSignature(string xHubSignature, string stringPayload, st
 }
 
 documentation {
-    Record representing the WebSubSubscriber notification received.
+    Record representing the WebSub Content Delivery Request received.
 
-    F{{payload}} The payload of the notification received
+    F{{payload}} The JSON payload of the notification received
     F{{request}} The HTTP POST request received as the notification
 }
 public type Notification {
@@ -245,7 +307,7 @@ public type Notification {
 };
 
 documentation {
-    Record to represent a WebSub subscription request.
+    Record representing a WebSub subscription change request.
 
     F{{topic}} The topic for which the subscription/unsubscription request is sent
     F{{callback}} The callback which should be registered/unregistered for the subscription/unsubscription request is
@@ -261,7 +323,7 @@ public type SubscriptionChangeRequest {
 };
 
 documentation {
-    Record to represent subscription/unsubscription details on success.
+    Record representing subscription/unsubscription details if a subscription/unsubscription request is successful.
 
     F{{hub}} The hub at which the subscription/unsubscription was successful
     F{{topic}} The topic for which the subscription/unsubscription was successful
@@ -290,7 +352,9 @@ public function startUpBallerinaHub(int? port = ()) returns WebSubHub {
 }
 
 documentation {
-    Object to represent a WebSub Hub.
+    Object representing a Ballerina WebSub Hub.
+
+    F{{hubUrl}} The URL of the started up Ballerina WebSub Hub
 }
 public type WebSubHub object {
 
@@ -301,7 +365,7 @@ public type WebSubHub object {
     new (hubUrl) {}
 
     documentation {
-        Stops the started up Ballerina Hub.
+        Stops the started up Ballerina WebSub Hub.
         
         R{{}} `boolean` indicating whether the internal Ballerina Hub was stopped
     }
@@ -378,10 +442,10 @@ documentation {
 
     P{{response}} The response being sent
     P{{hubs}} The hubs the publisher advertises as the hubs that it publishes updates to
-    P{{topic}} The topic to which subscribers need to subscribe to, to receive updates for the resource/topic
+    P{{topic}} The topic to which subscribers need to subscribe to, to receive updates for the resource
     R{{}} `http:Response` Response with the link header added
 }
-public function addWebSubLinkHeaders(http:Response response, string[] hubs, string topic) returns http:Response {
+public function addWebSubLinkHeader(http:Response response, string[] hubs, string topic) returns http:Response {
     string hubLinkHeader = "";
     foreach hub in hubs {
         hubLinkHeader = hubLinkHeader + "<" + hub + ">; rel=\"hub\", ";
@@ -399,10 +463,22 @@ documentation {
     F{{leaseSeconds}} The lease second period specified for the particular subscription
     F{{createdAt}} The time at which the subscription was created
 }
-public type SubscriptionDetails {
+type SubscriptionDetails {
     string topic,
     string callback,
     string secret,
     int leaseSeconds,
     int createdAt,
 };
+
+function retrieveSubscriberServiceAnnotations(typedesc serviceType) returns SubscriberServiceConfiguration? {
+    reflect:annotationData[] annotationDataArray = reflect:getServiceAnnotations(serviceType);
+    foreach annData in annotationDataArray {
+        if (annData.name == ANN_NAME_WEBSUB_SUBSCRIBER_SERVICE_CONFIG && annData.pkgName == WEBSUB_PACKAGE_NAME) {
+            SubscriberServiceConfiguration subscriberServiceAnnotation =
+                                                            check <SubscriberServiceConfiguration> (annData.value);
+            return subscriberServiceAnnotation;
+        }
+    }
+    return;
+}

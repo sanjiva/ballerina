@@ -461,6 +461,8 @@ public class TreeVisitor extends LSNodeVisitor {
         if (isWithinParameterContext(resourceName, NODE_TYPE_RESOURCE)) {
             this.populateSymbols(this.resolveAllVisibleSymbols(resourceEnv), resourceEnv);
             setTerminateVisitor(true);
+        } else if (this.isCursorAtResourceIdentifier(resourceNode, documentServiceContext)) {
+            setTerminateVisitor(true);
         } else if (!ScopeResolverConstants.getResolverByClass(cursorPositionResolver)
                 .isCursorBeforeNode(resourceNode.getPosition(), resourceNode, this, this.documentServiceContext)) {
 
@@ -664,6 +666,9 @@ public class TreeVisitor extends LSNodeVisitor {
         BSymbol objectSymbol = objectNode.symbol;
         SymbolEnv objectEnv = SymbolEnv.createPkgLevelSymbolEnv(objectNode, objectSymbol.scope, symbolEnv);
         blockOwnerStack.push(objectNode);
+        if (objectNode.fields.isEmpty() && objectNode.functions.isEmpty()) {
+            this.isCursorWithinBlock(objectNode.getPosition(), objectEnv);
+        }
         objectNode.fields.forEach(field -> {
             this.cursorPositionResolver = ObjectTypeScopeResolver.class;
             acceptNode(field, objectEnv);
@@ -965,5 +970,14 @@ public class TreeVisitor extends LSNodeVisitor {
             block.addStatement(stmt);
         }
         return block;
+    }
+    
+    private boolean isCursorAtResourceIdentifier(BLangResource bLangResource, LSServiceOperationContext context) {
+        Position position = context.get(DocumentServiceKeys.POSITION_KEY).getPosition();
+        DiagnosticPos zeroBasedPo = CommonUtil.toZeroBasedPosition(bLangResource.getPosition());
+        int line = position.getLine();
+        int nodeSLine = zeroBasedPo.sLine;
+        
+        return line == nodeSLine;
     }
 }

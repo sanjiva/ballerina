@@ -4,23 +4,14 @@ import ballerina/http;
 import ballerina/time;
 
 documentation {
-    Function to search packages from ballerina central.
+    This function searches packages from ballerina central.
 
-    P{{url}} - The endpoint url to be invoked.
-    P{{querySearched}} - The text searched for.
+    P{{definedEndpoint}} Endpoint defined with the proxy configurations
+    P{{url}} Endpoint url to be invoked
+    P{{querySearched}} Text searched for
 }
-function search (string url, string querySearched) {
-    endpoint http:Client httpEndpoint {
-        url:url,
-        secureSocket:{
-            trustStore:{
-                path:"${ballerina.home}/bre/security/ballerinaTruststore.p12",
-                password:"ballerina"
-            },
-            verifyHostname:false,
-            shareSession:true
-        }
-    };
+function search (http:Client definedEndpoint, string url, string querySearched) {
+    endpoint http:Client httpEndpoint = definedEndpoint;
     http:Request req = new;
     var result = httpEndpoint -> get(untaint querySearched, request=req);
     http:Response httpResponse = new;
@@ -41,15 +32,24 @@ function search (string url, string querySearched) {
         io:println(message);
     } else {
         jsonResponse = check (httpResponse.getJsonPayload());
-        json[] artifacts = check <json[]>jsonResponse.artifacts;
+        json[] artifacts = check <json[]> jsonResponse.artifacts;
         if (artifacts == null || lengthof artifacts > 0) {
             int artifactsLength = lengthof artifacts;
-            io:println("Ballerina Central");
-            printInCLI("NAME", 30);
-            printInCLI("DESCRIPTION", 40);
-            printInCLI("AUTHOR", 40);
-            printInCLI("DATE", 20);
-            printInCLI("VERSION", 15);
+            
+            printTitle("Ballerina Central");
+
+            printInCLI("|NAME", 18);
+            printInCLI("DESCRIPTION", 32);
+            printInCLI("DATE", 15);
+            printInCLI("VERSION", 8);
+
+            io:println("");
+
+            printCharacter("|-", 18, "-");
+            printCharacter("-", 32, "-");
+            printCharacter("-", 15, "-");
+            printCharacter("-", 8, "-");
+
             io:println("");
 
             int i = 0;
@@ -57,30 +57,20 @@ function search (string url, string querySearched) {
                 json jsonElement = artifacts[i];
                 string orgName = jsonElement.orgName.toString();
                 string packageName = jsonElement.packageName.toString();
-                printInCLI(orgName + "/" + packageName, 30);
+                printInCLI("|"+ orgName + "/" + packageName, 18);
                 
                 string summary = jsonElement.summary.toString();
-                printInCLI(summary, 40);
-                
-                string authors = "";
-                json authorsArr = jsonElement.authors;
-                foreach authorIndex in [0..lengthof authorsArr - 1] {
-                    if (authorIndex == lengthof authorsArr - 1) {
-                        authors = authors + authorsArr[authorIndex].toString();
-                    } else {
-                        authors = authors + " , " + authorsArr[authorIndex].toString();
-                    }
-                }
-                printInCLI(authors, 40);
+                printInCLI(summary, 32);
 
-                json createTimeJson = <json>jsonElement.createdDate;
-                printInCLI(getDateCreated(createTimeJson), 20);
+                json createTimeJson = <json> jsonElement.createdDate;
+                printInCLI(getDateCreated(createTimeJson), 15);
                 
                 string packageVersion = jsonElement.packageVersion.toString();
-                printInCLI(packageVersion, 15);               
+                printInCLI(packageVersion, 8);
                 i = i + 1;
                 io:println("");
             }
+            io:println("");
         } else {
             io:println("no packages found");
         }
@@ -88,10 +78,57 @@ function search (string url, string querySearched) {
 }
 
 documentation {
-    Function to print package information.
+    This function defines an endpoint with proxy configurations.
 
-    P{{element}} - The text to be printed.
-    P{{charactersAllowed}} - The maximum number of characters to be printed.
+    P{{url}} URL to be invoked
+    P{{hostname}} Host name of the proxy
+    P{{port}} Port of the proxy
+    P{{username}} Username of the proxy
+    P{{password}} Password of the proxy
+    R{{}} Endpoint defined
+}
+function defineEndpointWithProxy (string url, string hostname, string port, string username, string password) returns http:Client{
+    endpoint http:Client httpEndpoint {
+        url: url,
+        secureSocket:{
+            trustStore:{
+                path: "${ballerina.home}/bre/security/ballerinaTruststore.p12",
+                password: "ballerina"
+            },
+            verifyHostname: false,
+            shareSession: true
+        },
+        proxy : getProxyConfigurations(hostname, port, username, password)
+    };
+    return httpEndpoint;
+}
+
+documentation {
+    This function defines an endpoint without proxy configurations.
+
+    P{{url}} URL to be invoked
+    R{{}} Endpoint defined
+}
+function defineEndpointWithoutProxy (string url) returns http:Client{
+    endpoint http:Client httpEndpoint {
+        url: url,
+        secureSocket:{
+            trustStore:{
+                path: "${ballerina.home}/bre/security/ballerinaTruststore.p12",
+                password: "ballerina"
+            },
+            verifyHostname: false,
+            shareSession: true
+        }
+    };
+    return httpEndpoint;
+}
+
+documentation {
+    This function prints package information.
+
+    P{{element}} Text to be printed
+    P{{charactersAllowed}} Maximum number of characters to be printed
 }
 function printInCLI(string element, int charactersAllowed) {
     int lengthOfElement = element.length();
@@ -99,33 +136,88 @@ function printInCLI(string element, int charactersAllowed) {
         string trimmedElement = element.substring(0, charactersAllowed - 3) + "...";
         io:print(trimmedElement + "| ");
     } else {
-        io:print(element);
-        int i = 0;
-        while(i < charactersAllowed - lengthOfElement) {
-            io:print(" ");
-            i = i + 1;
-        }
-        io:print("| ");
+        printCharacter(element, charactersAllowed, " ");
     }
 }
 
 documentation {
-    Function to get the date the package was created in UTC.
+    This function prints any given character the specified number of times.
 
-    P{{jsonObj}} - The time object as a json.
-    R{{}} - `string` The date and time the package was created.
+    P{{element}} Characters to be printed
+    P{{charactersAllowed}} Maximum number of characters to be printed
+    P{{separator}} Character to be used as the separator
+}
+function printCharacter(string element, int charactersAllowed, string separator) {
+    int lengthOfElement = element.length();
+    string print = element;
+    int i = 0;
+    while(i < charactersAllowed - lengthOfElement) {
+        print = print + separator;
+        i = i + 1;
+    }
+    io:print(print + "| ");
+}
+
+documentation {
+    This function prints the title along with a horizontal separation.
+
+    P{{title}} Title to be printed
+}
+function printTitle(string title) {
+    io:println("");
+    io:println(title);
+    io:println("=================");
+    io:println("");
+}
+
+documentation {
+    This function gets the date the package was created in UTC.
+
+    P{{jsonObj}} Time object as a json
+    R{{}} Date and time the package was created
 }
 function getDateCreated(json jsonObj) returns string {
     string jsonTime = jsonObj.time.toString();
     int timeInMillis = check <int> jsonTime;
-    time:Time timeStruct = new(timeInMillis, {zoneId:"UTC",zoneOffset:0});
+    time:Time timeStruct = new(timeInMillis, { zoneId: "UTC", zoneOffset: 0 });
     string customTimeString = timeStruct.format("yyyy-MM-dd-E");
     return customTimeString;
 }
 
 documentation {
-    Main function which invokes the method to search for packages.
+    This function invokes the method to search for packages.
 }
 function main (string... args) {
-    search(args[0], args[1]);
+    http:Client httpEndpoint;
+    string host = args[2];
+    string port = args[3];
+    if (host != "" && port != "") {
+        try {
+            httpEndpoint = defineEndpointWithProxy(args[0], host, port, args[4], args[5]);
+        } catch (error err) {
+            io:println("failed to resolve host : " + host + " with port " + port);
+            return;
+        }
+    } else  if (host != "" || port != "") {
+        io:println("both host and port should be provided to enable proxy");     
+        return;   
+    } else {
+        httpEndpoint = defineEndpointWithoutProxy(args[0]);
+    }        
+    search(httpEndpoint, args[0], args[1]);
+}
+
+documentation {
+    This function sets the proxy configurations for the endpoint.
+
+    P{{hostName}} Host name of the proxy
+    P{{port}} Port of the proxy
+    P{{username}} Username of the proxy
+    P{{password}} Password of the proxy
+    R{{}} Proxy configurations for the endpoint
+}
+function getProxyConfigurations(string hostName, string port, string username, string password) returns http:ProxyConfig {
+    int portInt = check <int> port;
+    http:ProxyConfig proxy = { host : hostName, port : portInt , userName: username, password : password };
+    return proxy;
 }

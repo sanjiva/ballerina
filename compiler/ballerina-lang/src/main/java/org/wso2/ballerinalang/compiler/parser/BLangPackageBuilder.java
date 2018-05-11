@@ -1052,6 +1052,7 @@ public class BLangPackageBuilder {
         BLangNameReference nameReference = nameReferenceStack.pop();
         invocationNode.name = (BLangIdentifier) nameReference.name;
         invocationNode.addWS(this.invocationWsStack.pop());
+        invocationNode.addWS(nameReference.ws);
         invocationNode.pkgAlias = (BLangIdentifier) nameReference.pkgAlias;
         addExpressionNode(invocationNode);
     }
@@ -1586,6 +1587,9 @@ public class BLangPackageBuilder {
         nillTypeNode.typeKind = TypeKind.NIL;
         function.returnTypeNode = nillTypeNode;
 
+        attachDocumentations(function);
+        attachDeprecatedNode(function);
+
         ((BLangObject) this.objectStack.peek()).initFunction = function;
     }
 
@@ -2095,16 +2099,22 @@ public class BLangPackageBuilder {
         startBlock();
     }
 
-    public void addTransactionBlock(DiagnosticPos pos) {
+    public void addTransactionBlock(DiagnosticPos pos, Set<Whitespace> ws) {
         TransactionNode transactionNode = transactionNodeStack.peek();
         BLangBlockStmt transactionBlock = (BLangBlockStmt) this.blockNodeStack.pop();
         transactionBlock.pos = pos;
+        transactionNode.addWS(ws);
         transactionNode.setTransactionBody(transactionBlock);
     }
 
     public void endTransactionBlock(Set<Whitespace> ws) {
         TransactionNode transactionNode = transactionNodeStack.peek();
         transactionNode.getTransactionBody().addWS(ws);
+    }
+
+    public void endTransactionPropertyInitStatementList(Set<Whitespace> ws) {
+        TransactionNode transactionNode = transactionNodeStack.peek();
+        transactionNode.addWS(ws);
     }
 
     public void startOnretryBlock() {
@@ -2158,18 +2168,21 @@ public class BLangPackageBuilder {
         addStmtToCurrentBlock(retryNode);
     }
 
-    public void addRetryCountExpression() {
+    public void addRetryCountExpression(Set<Whitespace> ws) {
         BLangTransaction transaction = (BLangTransaction) transactionNodeStack.peek();
+        transaction.addWS(ws);
         transaction.retryCount = (BLangExpression) exprNodeStack.pop();
     }
 
-    public void addCommittedBlock() {
+    public void addCommittedBlock(Set<Whitespace> ws) {
         BLangTransaction transaction = (BLangTransaction) transactionNodeStack.peek();
+        transaction.addWS(ws);
         transaction.onCommitFunction = (BLangExpression) exprNodeStack.pop();
     }
 
-    public void addAbortedBlock() {
+    public void addAbortedBlock(Set<Whitespace> ws) {
         BLangTransaction transaction = (BLangTransaction) transactionNodeStack.peek();
+        transaction.addWS(ws);
         transaction.onAbortFunction = (BLangExpression) exprNodeStack.pop();
     }
 
@@ -2315,8 +2328,9 @@ public class BLangPackageBuilder {
         });
     }
 
-    public void addAnonymousEndpointBind() {
+    public void addAnonymousEndpointBind(Set<Whitespace> ws) {
         BLangService serviceNode = (BLangService) serviceNodeStack.peek();
+        serviceNode.addWS(ws);
         serviceNode.addAnonymousEndpointBind((RecordLiteralNode) exprNodeStack.pop());
     }
 
@@ -2369,7 +2383,7 @@ public class BLangPackageBuilder {
         }
         if (hasParameters) {
             BLangVariable firstParam = (BLangVariable) varListStack.peek().get(0);
-            if (firstParam.name.value.startsWith("$")) {
+            if (firstParam.name.value.startsWith("$") && varListStack.peek().size() > 1) {
                 // This is an endpoint variable
                 Set<Whitespace> wsBeforeComma = removeNthFromLast(firstParam.getWS(), 0);
                 resourceNode.addWS(wsBeforeComma);
@@ -2811,10 +2825,9 @@ public class BLangPackageBuilder {
         orderByVariableNode.setOrderByType(isAscending, isDescending);
     }
 
-    public void startLimitClauseNode(DiagnosticPos pos, Set<Whitespace> ws) {
+    public void startLimitClauseNode(DiagnosticPos pos) {
         LimitNode limitNode = TreeBuilder.createLimitNode();
         ((BLangLimit) limitNode).pos = pos;
-        limitNode.addWS(ws);
         this.limitClauseStack.push(limitNode);
     }
 
@@ -2937,6 +2950,13 @@ public class BLangPackageBuilder {
         windowClauseNode.addWS(ws);
         windowClauseNode.setFunctionInvocation(this.exprNodeStack.pop());
 
+        if (this.exprNodeStack.size() > 1) { // contains other than the streaming input name reference
+            List<ExpressionNode> exprList = new ArrayList<>();
+            addExprToExprNodeList(exprList, this.exprNodeStack.size() - 1);
+            StreamingInput streamingInput = this.streamingInputStack.peek();
+            streamingInput.setPreFunctionInvocations(exprList);
+        }
+
         if (!this.whereClauseStack.empty()) {
             this.streamingInputStack.peek().setWindowTraversedAfterWhere(true);
         } else {
@@ -2967,6 +2987,12 @@ public class BLangPackageBuilder {
             }
         }
 
+        if (this.exprNodeStack.size() > 1) {
+            List<ExpressionNode> exprList = new ArrayList<>();
+            addExprToExprNodeList(exprList, this.exprNodeStack.size() - 1);
+            streamingInput.setPostFunctionInvocations(exprList);
+        }
+
         if (!this.windowClausesStack.empty()) {
             streamingInput.setWindowClause(this.windowClausesStack.pop());
         }
@@ -2992,10 +3018,14 @@ public class BLangPackageBuilder {
         joinStreamingInput.setJoinType(joinType);
     }
 
-    public void startTableQueryNode(DiagnosticPos pos, Set<Whitespace> ws) {
+    public void endJoinType(Set<Whitespace> ws) {
+        JoinStreamingInput joinStreamingInput = this.joinStreamingInputsStack.peek();
+        joinStreamingInput.addWS(ws);
+    }
+
+    public void startTableQueryNode(DiagnosticPos pos) {
         TableQuery tableQuery = TreeBuilder.createTableQueryNode();
         ((BLangTableQuery) tableQuery).pos = pos;
-        tableQuery.addWS(ws);
         this.tableQueriesStack.push(tableQuery);
     }
 
@@ -3259,14 +3289,13 @@ public class BLangPackageBuilder {
     }
 
     public void endOutputRateLimitNode(DiagnosticPos pos, Set<Whitespace> ws, boolean isSnapshotOutputRateLimit,
-                                       boolean isEventBasedOutputRateLimit, boolean isFirst, boolean isLast,
-                                       boolean isAll, String timeScale, String rateLimitValue) {
+                                       boolean isFirst, boolean isLast, boolean isAll, String timeScale,
+                                       String rateLimitValue) {
         OutputRateLimitNode outputRateLimit = this.outputRateLimitStack.peek();
         ((BLangOutputRateLimit) outputRateLimit).pos = pos;
         outputRateLimit.addWS(ws);
 
         outputRateLimit.setSnapshot(isSnapshotOutputRateLimit);
-        outputRateLimit.setEventBasedRateLimit(isEventBasedOutputRateLimit);
         outputRateLimit.setOutputRateType(isFirst, isLast, isAll);
         outputRateLimit.setTimeScale(timeScale);
         outputRateLimit.setRateLimitValue(rateLimitValue);

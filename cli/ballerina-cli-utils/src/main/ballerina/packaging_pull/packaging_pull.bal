@@ -5,27 +5,19 @@ import ballerina/mime;
 import ballerina/http;
 
 @final int MAX_INT_VALUE = 2147483647;
+@final string VERSION_REGEX = "(\\d+\\.)(\\d+\\.)(\\d+)";
 
 documentation {
-    Function to pull a package from ballerina central.
+    This function pulls a package from ballerina central.
 
-    P{{url}} - The endpoint url to be invoked.
-    P{{dirPath}} - The path of the directory to save the pulled package.
-    P{{pkgPath}} - The package path.
-    P{{fileSeparator}} - The file separator based on the operating system.
+    P{{definedEndpoint}} Endpoint defined with the proxy configurations
+    P{{url}} url to be invoked
+    P{{dirPath}} Path of the directory to save the pulled package
+    P{{pkgPath}} Package path
+    P{{fileSeparator}} File separator based on the operating system
 }
-function pullPackage (string url, string dirPath, string pkgPath, string fileSeparator) {
-    endpoint http:Client httpEndpoint {
-        url:url,
-        secureSocket:{
-            trustStore:{
-                path:"${ballerina.home}/bre/security/ballerinaTruststore.p12",
-                password:"ballerina"
-            },
-            verifyHostname:false,
-            shareSession:true
-        }
-    };
+function pullPackage (http:Client definedEndpoint, string url, string dirPath, string pkgPath, string fileSeparator) {
+    endpoint http:Client httpEndpoint = definedEndpoint;
     string fullPkgPath = pkgPath;
     string destDirPath = dirPath;
     http:Request req = new;
@@ -37,99 +29,155 @@ function pullPackage (string url, string dirPath, string pkgPath, string fileSep
     match result {
         http:Response response => httpResponse = response;
         error e => {
-            io:println("Connection to the remote host failed : " + e.message);
+            io:println("connection to the remote host failed : " + e.message);
             return;
         }
     }
 
     http:Response res = new;
     string statusCode = <string> httpResponse.statusCode;
-    if (statusCode == "302"){
-        string locationHeader;
-        if (httpResponse.hasHeader("Location")) {
-            locationHeader = httpResponse.getHeader("Location");
-            var resultFS = callFileServer(locationHeader);
-            match resultFS {
-                http:Response response => res = response;
-                () => return;
-            }
-            if (res.statusCode != 200) {
-                json jsonResponse = check (res.getJsonPayload());
-                string message = jsonResponse.message.toString();
-                io:println(message);
-            } else {
-                string contentLengthHeader;
-                int pkgSize = MAX_INT_VALUE;
-                if (res.hasHeader("content-length")) {
-                    contentLengthHeader = res.getHeader("content-length");
-                    pkgSize = check <int> contentLengthHeader;
-                } else {
-                    io:println("warning: package size information is missing from the remote repository");
-                }
-
-                io:ByteChannel sourceChannel = check (res.getByteChannel());
-
-                string rawPathVal;
-                if (res.hasHeader("raw-path")) {
-                    rawPathVal = res.getHeader("raw-path");
-                    string pkgVersion;
-                    string [] pathArray = rawPathVal.split("/");
-                    int sizeOfArray = lengthof pathArray;
-                    if (sizeOfArray > 3) {
-                        pkgVersion = pathArray[sizeOfArray - 2];
-                        string pkgName = fullPkgPath.substring(fullPkgPath.lastIndexOf("/") + 1, fullPkgPath.length());
-                        fullPkgPath = fullPkgPath + ":" + pkgVersion;
-
-                        // Create the version directory
-                        destDirPath = destDirPath + fileSeparator + pkgVersion;
-                        
-                        string archiveFileName = pkgName + ".zip";
-                        string destArchivePath = destDirPath  + fileSeparator + archiveFileName;
-
-                        if (!createDirectories(destDirPath)) {
-                            internal:Path pkgArchivePath = new(destArchivePath);
-                            if (internal:pathExists(pkgArchivePath)){
-                                io:println("package already exists in the home repository");
-                                return;                              
-                            }        
-                        }
-
-                        io:ByteChannel destDirChannel = getFileChannel(destArchivePath, "w");
-                        string toAndFrom = " [central.ballerina.io -> home repo]";
-
-                        copy(pkgSize, sourceChannel, destDirChannel, fullPkgPath, toAndFrom);
-                        _ = destDirChannel.close();
-                        _ = sourceChannel.close();
-                    } else {
-                        io:println("package version information is missing from the remote repository");
-                    }
-                } else {
-                    io:println("package version information is missing from the remote repository");
-                }
-            }
-        } else {
-            io:println("package location information is missing from the remote repository");
-        }
-    } else if (statusCode.hasPrefix("5")) {
+    if (statusCode.hasPrefix("5")) {
         io:println("remote registry failed for url :" + url);
+    } else if (statusCode != "200") {
+        var jsonResponse = httpResponse.getJsonPayload();
+        match jsonResponse {
+            json resp => {
+                string message = resp.message.toString();
+                io:println(message);
+            }
+            error err => {
+                io:println("error occurred when pulling the package");
+            }
+        }
     } else {
-       io:println("error occurred when pulling the package");
+        string contentLengthHeader;
+        int pkgSize = MAX_INT_VALUE;
+
+        if (httpResponse.hasHeader("content-length")) {
+            contentLengthHeader = httpResponse.getHeader("content-length");
+            pkgSize = check <int> contentLengthHeader;
+        } else {
+            io:println("warning: package size information is missing from the remote repository");
+        }
+
+        io:ByteChannel sourceChannel = check (httpResponse.getByteChannel());
+
+        string resolvedURI = httpResponse.resolvedRequestedURI;
+        if (resolvedURI == "") {
+            resolvedURI = url;
+        }
+        
+        string [] uriParts = resolvedURI.split("/");
+        string pkgVersion = uriParts[lengthof uriParts - 2];
+        boolean valid = check pkgVersion.matches(VERSION_REGEX);
+
+        if (valid) { 
+            string pkgName = fullPkgPath.substring(fullPkgPath.lastIndexOf("/") + 1, fullPkgPath.length());
+            string archiveFileName = pkgName + ".zip";
+
+            fullPkgPath = fullPkgPath + ":" + pkgVersion;
+            destDirPath = destDirPath + fileSeparator + pkgVersion;        
+            string destArchivePath = destDirPath  + fileSeparator + archiveFileName;
+
+            if (!createDirectories(destDirPath)) {
+                internal:Path pkgArchivePath = new(destArchivePath);
+                if (internal:pathExists(pkgArchivePath)){
+                    io:println("package already exists in the home repository");
+                    return;                              
+                }        
+            }
+
+            io:ByteChannel destDirChannel = getFileChannel(destArchivePath, io:WRITE);
+            string toAndFrom = " [central.ballerina.io -> home repo]";
+
+            copy(pkgSize, sourceChannel, destDirChannel, fullPkgPath, toAndFrom);
+                                
+            closeChannel(destDirChannel);
+            closeChannel(sourceChannel);
+        } else {
+            io:println("package version could not be detected");
+        }
     }
 }
 
 documentation {
-    Main function which invokes the method to pull the package.
+    This function will invoke the method to pull the package.
 }
 function main(string... args){
-    pullPackage(args[0], args[1], args[2], args[3]);
+    http:Client httpEndpoint;
+    string host = args[4];
+    string port = args[5];
+    if (host != "" && port != "") {
+        try {
+          httpEndpoint = defineEndpointWithProxy(args[0], host, port, args[6], args[7]);
+        } catch (error err) {
+          io:println("failed to resolve host : " + host + " with port " + port);
+          return;
+        }
+    } else  if (host != "" || port != "") {
+        io:println("both host and port should be provided to enable proxy");     
+        return;   
+    } else {
+        httpEndpoint = defineEndpointWithoutProxy(args[0]);
+    }
+    pullPackage(httpEndpoint, args[0], args[1], args[2], args[3]);
 }
 
 documentation {
-    Function to get the file channel.
+    This function defines an endpoint with proxy configurations.
 
-    P{{filePath}} - The file path.
-    P{{permission}} - The permissions provided.
-    R{{}} - `ByteChannel` of the file content.
+    P{{url}} URL to be invoked
+    P{{hostname}} Host name of the proxy
+    P{{port}} Port of the proxy
+    P{{username}} Username of the proxy
+    P{{password}} Password of the proxy
+    R{{}} Endpoint defined
+}
+function defineEndpointWithProxy (string url, string hostname, string port, string username, string password) returns http:Client{
+    endpoint http:Client httpEndpoint {
+        url: url,
+        secureSocket:{
+            trustStore:{
+                path: "${ballerina.home}/bre/security/ballerinaTruststore.p12",
+                password: "ballerina"
+            },
+            verifyHostname: false,
+            shareSession: true
+        },
+        followRedirects: { enabled: true, maxCount: 5 },
+        proxy : getProxyConfigurations(hostname, port, username, password)
+    };
+    return httpEndpoint;
+}
+
+documentation {
+    This function defines an endpoint without proxy configurations.
+
+    P{{url}} URL to be invoked
+    R{{}} Endpoint defined
+}
+function defineEndpointWithoutProxy (string url) returns http:Client{
+    endpoint http:Client httpEndpoint {
+        url: url,
+        secureSocket:{
+            trustStore:{
+                path: "${ballerina.home}/bre/security/ballerinaTruststore.p12",
+                password: "ballerina"
+            },
+            verifyHostname: false,
+            shareSession: true
+        },
+        followRedirects: { enabled: true, maxCount: 5 }
+    };
+    return httpEndpoint;
+}
+
+documentation {
+    This function will get the file channel.
+
+    P{{filePath}} File path
+    P{{permission}} Permissions provided
+    R{{}} `ByteChannel` of the file content
 }
 function getFileChannel (string filePath, io:Mode permission) returns (io:ByteChannel) {
     io:ByteChannel channel = io:openFile(untaint filePath, permission);
@@ -137,11 +185,11 @@ function getFileChannel (string filePath, io:Mode permission) returns (io:ByteCh
 }
 
 documentation {
-    Function to read the bytes from the byte channel.
+    This function will read the bytes from the byte channel.
 
-    P{{channel}} - The byte channel.
-    P{{numberOfBytes}} - The number of bytes to be read.
-    R{{}} - `blob` of the bytes read as a blob along with the `int` number of bytes read.
+    P{{channel}} Byte channel
+    P{{numberOfBytes}} Number of bytes to be read
+    R{{}} Bytes read as a blob along with the number of bytes read.
 }
 function readBytes (io:ByteChannel channel, int numberOfBytes) returns (blob, int) {
     blob bytes;
@@ -151,12 +199,12 @@ function readBytes (io:ByteChannel channel, int numberOfBytes) returns (blob, in
 }
 
 documentation {
-    Function to write the bytes from the byte channel.
+    This function will write the bytes from the byte channel.
 
-    P{{channel}} - The byte channel.
-    P{{content}} - The content to be written as a blob.
-    P{{startOffset}} - The offset.
-    R{{}} - `int` number of bytes written.
+    P{{channel}} Byte channel
+    P{{content}} Content to be written as a blob
+    P{{startOffset}} Offset
+    R{{}} number of bytes written.
 }
 function writeBytes (io:ByteChannel channel, blob content, int startOffset) returns (int) {
     int numberOfBytesWritten = check (channel.write(content, startOffset));
@@ -164,13 +212,13 @@ function writeBytes (io:ByteChannel channel, blob content, int startOffset) retu
 }
 
 documentation {
-    Function to copy files from source to the destination path.
+    This function will copy files from source to the destination path.
 
-    P{{pkgSize}} - The size of the package pulled.
-    P{{src}} - The byte channel of the source file.
-    P{{dest}} - The byte channel of the destination folder.
-    P{{fullPkgPath}} - The full package path.
-    P{{toAndFrom}} - The pulled package details.
+    P{{pkgSize}} Size of the package pulled
+    P{{src}} Byte channel of the source file
+    P{{dest}} Byte channel of the destination folder
+    P{{fullPkgPath}} Full package path
+    P{{toAndFrom}} Pulled package details
 }
 function copy (int pkgSize, io:ByteChannel src, io:ByteChannel dest, string fullPkgPath, string toAndFrom) {
     string truncatedFullPkgPath = truncateString(fullPkgPath);
@@ -196,7 +244,7 @@ function copy (int pkgSize, io:ByteChannel src, io:ByteChannel dest, string full
             totalCount = totalCount + readCount;
             float percentage = totalCount / pkgSize;
             noOfBytesRead = totalCount + "/" + pkgSize;
-            string bar = equals.substring(0, <int>(percentage * 10));
+            string bar = equals.substring(0, <int> (percentage * 10));
             string spaces = tabspaces.substring(0, 10 - <int>(percentage * 10));
             io:print("\r" + rightPad(msg, 100) + "[" + bar + ">" + spaces + "] " + <int>totalCount + "/" + pkgSize);
         }
@@ -207,11 +255,11 @@ function copy (int pkgSize, io:ByteChannel src, io:ByteChannel dest, string full
 }
 
 documentation {
-    Function to include the right pad.
+    This function adds the right pad.
 
-    P{{logMsg}} - The log message to be printed.
-    P{{logMsgLength}} - The length of the log message.
-    R{{}} - `string` The log message to be printed after adding the right pad.
+    P{{logMsg}} Log message to be printed
+    P{{logMsgLength}} Length of the log message
+    R{{}} The log message to be printed after adding the right pad
 }
 function rightPad (string logMsg, int logMsgLength) returns (string) {
     string msg = logMsg;
@@ -227,10 +275,10 @@ function rightPad (string logMsg, int logMsgLength) returns (string) {
 }
 
 documentation {
-    Function to truncate the string.
+    This function truncates the string.
 
-    P{{text}} - The string to be truncated.
-    R{{}} - `string` The truncated string.
+    P{{text}} String to be truncated
+    R{{}} Truncated string.
 }
 function truncateString (string text) returns (string) {
     int indexOfVersion = text.lastIndexOf(":");
@@ -255,10 +303,10 @@ function truncateString (string text) returns (string) {
 }
 
 documentation {
-    Function to create directories.
+    This function creates directories.
 
-    P{{directoryPath}} - The directory path to be created.
-    R{{}} - `boolean` If the directories were created or not.
+    P{{directoryPath}} Directory path to be created
+    R{{}} If the directories were created or not
 }
 function createDirectories(string directoryPath) returns (boolean) {
     internal:Path dirPath = new(directoryPath);
@@ -271,31 +319,30 @@ function createDirectories(string directoryPath) returns (boolean) {
 }
 
 documentation {
-    Function to invoke the FileServer endpoint.
+    This function will close the byte channel.
 
-    P{{url}} - The endpoint url to be invoked.
-    R{{}} - `Response` The response got after invoking the endpoint.
+    P{{channel}} Byte channel to be closed
+}
+function closeChannel(io:ByteChannel channel) {
+    match channel.close() {
+        error channelCloseError => {
+            io:println("Error occured while closing the channel: " + channelCloseError.message);
+        }
+        () => return;
+    }
 }
 
-function callFileServer(string url) returns http:Response? {
-    endpoint http:Client httpEndpoint {
-        url:url,
-        secureSocket:{
-            trustStore:{
-                path:"${ballerina.home}/bre/security/ballerinaTruststore.p12",
-                password:"ballerina"
-            },
-            verifyHostname:false,
-            shareSession:true
-        }
-    };
-    http:Request req = new;
-    var result = httpEndpoint -> get("", request=req);
-    match result {
-        http:Response response => return response;
-        error e => {
-            io:println("Connection to the remote host failed : " + e.message);
-            return;
-        }
-    }
+documentation {
+    This function sets the proxy configurations for the endpoint.
+
+    P{{hostName}} Host name of the proxy
+    P{{port}} Port of the proxy
+    P{{username}} Username of the proxy
+    P{{password}} Password of the proxy
+    R{{}} Proxy configurations for the endpoint
+}
+function getProxyConfigurations(string hostName, string port, string username, string password) returns http:ProxyConfig {
+    int portInt = check <int> port;
+    http:ProxyConfig proxy = { host : hostName, port : portInt , userName: username, password : password };
+    return proxy;
 }
