@@ -20,6 +20,7 @@ import _ from 'lodash';
 import Node from './tree/node';
 
 const isRetry = n => n.kind === 'Retry';
+const anonTypes = {};
 
 // TODO: Move this to a generic place.
 function requireAll(requireContext) {
@@ -99,8 +100,14 @@ class TreeBuilder {
 
     static modifyNode(node, parentKind) {
         const kind = node.kind;
-        if (kind === 'If' && node.elseStatement && node.elseStatement.kind === 'If') {
-            node.ladderParent = true;
+        if (kind === 'If') {
+            if (node.elseStatement) {
+                node.ladderParent = true;
+            }
+
+            if (node.ws && node.ws.length > 1 && node.ws[0].text === 'else' && node.ws[1].text === 'if') {
+                node.isElseIfBlock = true;
+            }
         }
 
         if (kind === 'Transaction') {
@@ -113,8 +120,51 @@ class TreeBuilder {
                 }
             }
         }
-        if (kind === 'XmlElementLiteral' && parentKind !== 'XmlElementLiteral') {
+
+        if ((kind === 'XmlCommentLiteral' ||
+                kind === 'XmlElementLiteral' ||
+                kind === 'XmlTextLiteral' ||
+                kind === 'XmlPiLiteral') && node.ws && node.ws[0] &&
+            node.ws[0].text.includes('xml') && node.ws[0].text.includes('`')) {
             node.root = true;
+            node.startLiteral = node.ws[0].text;
+        }
+
+        if (parentKind === 'XmlElementLiteral' ||
+            parentKind === 'XmlTextLiteral' ||
+            parentKind === 'XmlPiLiteral') {
+            node.inTemplateLiteral = true;
+        }
+
+        if (kind === 'XmlPiLiteral' && node.ws) {
+            let startTagWS = {
+                text: '<?',
+                ws: '',
+            };
+
+            let endTagWS = {
+                text: '?>',
+                ws: '',
+            };
+
+            if (node.root && (node.ws.length > 1)) {
+                node.ws.splice(1, 0, startTagWS);
+                node.ws.splice(2, 0, endTagWS);
+            }
+
+            if (!node.root) {
+                node.ws.splice(0, 0, startTagWS);
+                node.ws.splice(node.ws.length, 0, endTagWS);
+            }
+
+            if (node.target && node.target.unescapedValue) {
+                for (let i = 0; i < node.target.ws.length; i++) {
+                    if (node.target.ws[i].text.includes('<?') &&
+                        node.target.ws[i].text.includes(node.target.unescapedValue)) {
+                        node.target.unescapedValue = node.target.ws[i].text.replace('<?', '');
+                    }
+                }
+            }
         }
 
         if (kind === 'AnnotationAttachment' && node.packageAlias.value === 'builtin') {
@@ -135,15 +185,12 @@ class TreeBuilder {
                     node.userDefinedAlias = true;
                 }
             }
-            if (node.packageName.length === 2
-                && node.packageName[0].value === 'transactions' && node.packageName[1].value === 'coordinator') {
+
+            if ((node.packageName.length === 2 && node.packageName[0].value === 'transactions' &&
+                    node.packageName[1].value === 'coordinator') || (node.alias && node.alias.value &&
+                    node.alias.value.startsWith('.'))) {
                 node.isInternal = true;
             }
-        }
-
-        if (parentKind === 'XmlElementLiteral' || parentKind === 'XmlCommentLiteral' ||
-            parentKind === 'StringTemplateLiteral') {
-            node.inTemplateLiteral = true;
         }
 
         if (parentKind === 'CompilationUnit' && (kind === 'Variable' || kind === 'Xmlns')) {
@@ -158,6 +205,14 @@ class TreeBuilder {
         }
 
         if (node.kind === 'Variable') {
+            if (parentKind === 'ObjectType') {
+                node.inObject = true;
+            }
+
+            if (node.typeNode && node.typeNode.isAnonType) {
+                node.isAnonType = true;
+            }
+
             if (node.initialExpression && node.initialExpression.async) {
                 if (node.ws) {
                     for (let i = 0; i < node.ws.length; i++) {
@@ -179,21 +234,44 @@ class TreeBuilder {
                     }
                 }
             }
+
+            if (node.typeNode && node.typeNode.ws && !node.ws) {
+                node.noVisibleName = true;
+            }
+
+            if (node.ws) {
+                for (let i = 0; i < node.ws.length; i++) {
+                    if (node.ws[i].text === ';') {
+                        node.endWithSemicolon = true;
+                    }
+
+                    if (node.ws[i].text === ',') {
+                        node.endWithComma = true;
+                    }
+                }
+            }
         }
 
         if (node.kind === 'Service') {
             if (!node.serviceTypeStruct) {
                 node.isServiceTypeUnavailable = true;
             }
+
+            if (!node.anonymousEndpointBind && node.boundEndpoints && node.boundEndpoints.length <= 0
+                && !_.find(node.ws, (ws) => ws.text === 'bind')) {
+                node.bindNotAvailable = true;
+            }
         }
 
         // Mark the first argument ad a service endpoint.
         if (node.kind === 'Resource' && node.parameters[0]) {
-            const endpointParam = node.parameters[0];
-            const valueWithBar = endpointParam.name.valueWithBar || endpointParam.name.value;
-            endpointParam.serviceEndpoint = true;
-            endpointParam.name.setValue(endpointParam.name.getValue().replace('$', ''));
-            endpointParam.name.valueWithBar = valueWithBar.replace('$', '');
+            if (node.parameters[0].ws && _.find(node.parameters[0].ws, (ws) => ws.text === 'endpoint')) {
+                const endpointParam = node.parameters[0];
+                const valueWithBar = endpointParam.name.valueWithBar || endpointParam.name.value;
+                endpointParam.serviceEndpoint = true;
+                endpointParam.name.setValue(endpointParam.name.getValue().replace('$', ''));
+                endpointParam.name.valueWithBar = valueWithBar.replace('$', '');
+            }
         }
 
         // Add the positions for the join and timeout bodies.
@@ -208,9 +286,9 @@ class TreeBuilder {
         }
 
         // Check if sorrounded by curlies
-        if (node.kind === 'MatchPatternClause') {
-            if (!node.ws) {
-                node.withoutCurlies = true;
+        if (node.kind === 'MatchPatternClause' || node.kind === 'MatchExpressionPatternClause') {
+            if (node.ws && node.ws.length > 2) {
+                node.withCurlies = true;
             }
         }
 
@@ -221,37 +299,63 @@ class TreeBuilder {
             }
 
             if (node.typeKind && node.typeKind === 'nil' && node.ws) {
-                node.emptyParantheses=true;
+                node.emptyParantheses = true;
+            }
+
+            if (node.nullable && node.ws) {
+                for (let i = 0; i < node.ws.length; i++) {
+                    if (node.ws[i].text === '?') {
+                        node.nullableOperatorAvailable = true;
+                    }
+                }
             }
         }
 
-        if (node.kind === 'UnionTypeNode') {
-            if (node.ws && node.ws.length > 2) {
+        if (node.kind === 'UnionTypeNode' && node.ws) {
+            if (node.ws.length > 2 && _.find(node.ws, (ws) => ws.text === '(')) {
                 node.withParantheses = true;
+            }
+
+            for (let i = 0; i < node.memberTypeNodes.length; i++) {
+                if (node.memberTypeNodes[i].nullable && _.find(node.ws, (ws) => ws.text === '?')) {
+                    node.memberTypeNodes[i].nullableOperatorAvailable = true;
+                }
             }
         }
 
         if (node.kind === 'Function') {
-            if (node.returnTypeNode && node.returnTypeNode.typeKind !== 'nil') {
+            if (node.returnTypeNode && node.returnTypeNode.ws && node.returnTypeNode.ws.length > 0) {
                 node.hasReturns = true;
-                if (node.ws) {
-                    for (let i = 0; i < node.ws.length; i++) {
-                        if (node.ws[i].text === ')' && node.ws[i + 1].text !== 'returns') {
-                            for (let j = 0; j < node.returnTypeNode.ws.length; j++) {
-                                if (node.returnTypeNode.ws[j].text === 'returns') {
-                                    node.ws.splice((i + 1), 0, node.returnTypeNode.ws[j]);
-                                    node.returnTypeNode.ws.splice(j, 1);
-                                    break;
-                                }
-                            }
-                            break;
-                        }
-                    }
+            }
+
+            if (node.defaultableParameters) {
+                for (let i = 0; i < node.defaultableParameters.length; i++) {
+                    node.defaultableParameters[i].defaultable = true;
+                    node.defaultableParameters[i].variable.defaultable = true;
                 }
             }
 
+            node.allParams = _.concat(node.parameters, node.defaultableParameters);
+            node.allParams.sort((a, b) => {
+                return (((a.position.endColumn > b.position.startColumn)
+                    && (a.position.endLine === b.position.endLine))
+                    || (a.position.endLine > b.position.endLine));
+            });
+
             if (node.receiver && !node.receiver.ws) {
-                node.noVisibleReceiver = true;
+
+                if (_.find(node.ws, (ws) => ws.text === '::')
+                    && node.receiver.typeNode
+                    && node.receiver.typeNode.ws
+                    && node.receiver.typeNode.ws.length > 0) {
+                    node.objectOuterFunction = true;
+                    if (node.receiver.typeNode.ws[0].text === 'function') {
+                        node.receiver.typeNode.ws.splice(0, 1);
+                    }
+                    node.objectOuterFunctionTypeName = node.receiver.typeNode.typeName;
+                } else {
+                    node.noVisibleReceiver = true;
+                }
             }
 
             if (node.restParameters && node.parameters && node.parameters.length > 0) {
@@ -263,51 +367,44 @@ class TreeBuilder {
             }
         }
 
-        if (node.kind === 'Object') {
-            node.publicFields = [];
-            node.privateFields = [];
-            let fields = node.fields;
-            let privateFieldBlockVisible = false;
-            let publicFieldBlockVisible = false;
-
-            for (let i = 0; i < fields.length; i++) {
-                if (fields[i].public) {
-                    node.publicFields.push(fields[i]);
-                } else {
-                    node.privateFields.push(fields[i]);
-                }
+        if (node.kind === 'TypeDefinition' && node.typeNode) {
+            if (!node.ws) {
+                node.notVisible = true;
             }
 
-            if (node.ws) {
-                for (let i = 0; i < node.ws.length; i++) {
-                    if (node.ws[i].text === 'public' && node.ws[i + 1].text === '{') {
-                        publicFieldBlockVisible = true;
-                    }
+            if (node.name && node.name.value.startsWith('$anonType$')) {
+                anonTypes[node.name.value] = node.typeNode;
+            }
 
-                    if (node.ws[i].text === 'private' && node.ws[i + 1].text === '{') {
-                        privateFieldBlockVisible = true;
+            if (node.typeNode.kind === 'ObjectType') {
+                node.isObjectType = true;
+            }
+
+            if (node.typeNode.kind === 'RecordType') {
+                node.isRecordType = true;
+                if (node.ws) {
+                    for (let i = 0; i < node.ws.length; i++) {
+                        if (node.ws[i].text === 'record') {
+                            node.isRecordKeywordAvailable = true;
+                        }
                     }
                 }
             }
+        }
 
-            if (node.privateFields.length <= 0 && !privateFieldBlockVisible) {
-                node.noPrivateFieldsAvailable = true;
-            }
-
-            if (node.publicFields.length <= 0 && !publicFieldBlockVisible) {
-                node.noPublicFieldAvailable = true;
-            }
-
-            if (fields.length <= 0 && node.noPrivateFieldsAvailable && node.noPublicFieldAvailable) {
-                node.noFieldsAvailable = true;
-            }
-
+        if (node.kind === 'ObjectType') {
             if (node.initFunction) {
                 if (!node.initFunction.ws) {
                     node.initFunction.defaultConstructor = true;
                 } else {
                     node.initFunction.isConstructor = true;
                 }
+            }
+        }
+
+        if (node.kind === 'RecordType') {
+            if (node.restFieldType) {
+               node.isRestFieldAvailable = true;
             }
         }
 
@@ -339,12 +436,16 @@ class TreeBuilder {
                 }
 
                 if (node.expression.value === 'null') {
-                    node.emptyBrackets = true;
+                    node.expression.emptyParantheses = true;
                 }
             }
         }
 
         if (node.kind === "Documentation") {
+            if (node.ws && node.ws.length > 1) {
+                node.startDoc = node.ws[0].text;
+            }
+
             for (let j = 0; j < node.attributes.length; j++) {
                 let attribute = node.attributes[j];
                 if (attribute.ws) {
@@ -401,6 +502,169 @@ class TreeBuilder {
         if (node.kind === 'FunctionType') {
             if (node.returnTypeNode && node.returnTypeNode.ws) {
                 node.hasReturn = true;
+            }
+
+            if (node.ws && node.ws[0] && node.ws[0].text === '(') {
+                node.withParantheses = true;
+            }
+        }
+
+        if (node.kind === 'Literal' && parentKind !== 'StringTemplateLiteral') {
+            if (node.ws && node.ws.length === 1 && node.ws[0] && node.ws[0].text) {
+                node.value = node.ws[0].text;
+            }
+
+            if ((node.value === 'nil' || node.value === 'null') && node.ws
+                && node.ws.length < 3 && node.ws[0] && node.ws[0].text === '(') {
+                node.emptyParantheses = true;
+            }
+        }
+
+        if (node.kind === 'Foreach') {
+            if (node.ws && _.find(node.ws, (ws) => ws.text === '(')) {
+                node.withParantheses = true;
+            }
+        }
+
+        if (node.kind === 'Endpoint') {
+            if (node.ws && _.find(node.ws, (ws) => ws.text === '=')) {
+                node.isConfigAssignment = true;
+            }
+        }
+
+        if (node.kind === 'UserDefinedType') {
+            if (node.ws && node.nullable && _.find(node.ws, (ws) => ws.text === '?')) {
+                node.nullableOperatorAvailable = true;
+            }
+
+            if (node.typeName && node.typeName.value && anonTypes[node.typeName.value]) {
+                node.isAnonType = true;
+                node.anonType = anonTypes[node.typeName.value];
+                delete anonTypes[node.typeName.value];
+            }
+        }
+
+        if (node.kind === 'ArrayType') {
+            if (node.dimensions > 0 && node.ws) {
+                node.dimensionAsString = "";
+                let startingBracket;
+                let endingBracket;
+                let content = "";
+
+                for (let j = 0; j < node.ws.length; j++) {
+                    if (node.ws[j].text === '[') {
+                        startingBracket = node.ws[j];
+                    } else if (node.ws[j].text === ']') {
+                        endingBracket = node.ws[j];
+                        node.dimensionAsString += startingBracket.text + content +
+                            endingBracket.ws + endingBracket.text;
+
+                        content = "";
+                        startingBracket = null;
+                        endingBracket = null;
+                    } else if (startingBracket) {
+                        content += node.ws[j].ws + node.ws[j].text;
+                    }
+                }
+            }
+        }
+
+        if (node.kind === 'Block' && node.ws && node.ws[0] && node.ws[0].text === 'else') {
+            node.isElseBlock = true;
+        }
+
+        if (node.kind === 'FieldBasedAccessExpr' && node.ws && node.ws[0] && node.ws[0].text === '!') {
+            node.errorLifting = true;
+        }
+
+        // Function to assign ws for template literals.
+        let literalWSAssignForTemplates = function (currentWs, nextWs, literals, ws, wsStartLocation) {
+            if (literals.length === (ws.length - wsStartLocation)) {
+                for (let i = 0; i < literals.length; i++) {
+                    if (literals[i].kind === 'Literal') {
+                        if (!literals[i].ws) {
+                            literals[i].ws = [];
+                        }
+
+                        if (ws[currentWs].text.includes('{{')) {
+                            literals[i].ws.push(ws[currentWs]);
+                            literals[i].value = ws[currentWs].text;
+                            ws.splice(currentWs, 1);
+                            literals[i].startTemplateLiteral = true;
+                        } else if (ws[currentWs].text.includes('}}')) {
+                            literals[i].ws.push(ws[currentWs]);
+                            if (ws[nextWs].text.includes('{{')) {
+                                literals[i].ws.push(ws[nextWs]);
+                                literals[i].value = ws[nextWs].text;
+                                literals[i].startTemplateLiteral = true;
+                                ws.splice(nextWs, 1);
+                            }
+                            ws.splice(currentWs, 1);
+                            literals[i].endTemplateLiteral = true;
+                        }
+
+                        if (i === (literals.length - 1)) {
+                            literals[i].ws.push(ws[currentWs]);
+                            literals[i].value = ws[currentWs].text;
+                            literals[i].lastNodeValue = true;
+                            ws.splice(currentWs, 1);
+                        }
+                    }
+                }
+            } else if ((literals.length - 1) === (ws.length - wsStartLocation)) {
+                for (let i = 0; i < literals.length; i++) {
+                    if (literals[i].kind === 'Literal') {
+                        if (!literals[i].ws) {
+                            literals[i].ws = [];
+                        }
+
+                        if (ws[currentWs].text.includes('{{')) {
+                            literals[i].ws.push(ws[currentWs]);
+                            literals[i].value = ws[currentWs].text;
+                            ws.splice(currentWs, 1);
+                            literals[i].startTemplateLiteral = true;
+                        } else if (ws[currentWs].text.includes('}}')) {
+                            literals[i].ws.push(ws[currentWs]);
+                            if (ws[nextWs].text.includes('{{')) {
+                                literals[i].ws.push(ws[nextWs]);
+                                literals[i].value = ws[nextWs].text;
+                                literals[i].startTemplateLiteral = true;
+                                ws.splice(nextWs, 1);
+                            }
+                            ws.splice(currentWs, 1);
+                            literals[i].endTemplateLiteral = true;
+                        }
+                    }
+                }
+            }
+        };
+
+        if (node.kind === 'StringTemplateLiteral') {
+            if (node.ws && node.ws[0] &&
+                node.ws[0].text.includes('string') && node.ws[0].text.includes('`')) {
+                node.startTemplate = node.ws[0].text;
+                literalWSAssignForTemplates(1, 2, node.expressions, node.ws, 2);
+            }
+        }
+
+        if (kind === 'XmlCommentLiteral' && node.ws) {
+            let length = node.ws.length;
+            for (let i = 0; i < length; i++) {
+                if (node.ws[i].text.includes('-->') && node.ws[i].text.length > 3) {
+                    let ws = {
+                        text: '-->',
+                        ws: '',
+                    };
+                    node.ws[i].text = node.ws[i].text.replace('-->', '');
+                    node.ws.splice(i + 1, 0, ws);
+                    break;
+                }
+            }
+
+            if (node.root) {
+                literalWSAssignForTemplates(2, 3, node.textFragments, node.ws, 4);
+            } else {
+                literalWSAssignForTemplates(1, 2, node.textFragments, node.ws, 2);
             }
         }
     }

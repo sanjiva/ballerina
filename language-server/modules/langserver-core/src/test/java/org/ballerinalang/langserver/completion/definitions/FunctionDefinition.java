@@ -46,13 +46,14 @@ public class FunctionDefinition extends CompletionTest {
                 {"variableBoundItemSuggestions3.json", "function"},
                 {"variableBoundItemSuggestions4.json", "function"},
                 {"throwStatementErrorSuggestions.json", "function"},
-//                {"enumSuggestAssignment1.json", "function"},
-//                {"enumSuggestAssignment2.json", "function"},
-//                {"enumSuggestVarDef1.json", "function"},
-//                {"enumSuggestVarDef2.json", "function"},
-//                {"structFields.json", "function"},
-//                {"structBoundFunctionsAndFields.json", "function"},
-//                {"packageContentWithSucceedingCharacter1.json", "function"}
+                {"endpointAttributeSuggestion1.json", "function"},
+                {"recordVarDef1.json", "function"},
+                {"recordVarDef2.json", "function"},
+                {"functionPointerAsParameter.json", "function"},
+                {"matchStatementSuggestions1.json", "function"},
+                {"matchStatementSuggestions2.json", "function"},
+                {"matchStatementSuggestions3.json", "function"},
+                {"matchStatementSuggestions4.json", "function"},
         };
     }
 }

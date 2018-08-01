@@ -30,6 +30,8 @@ public enum CompilerOptionName {
 
     OFFLINE("offline"),
 
+    SKIP_TESTS("skipTests"),
+
     COMPILER_PHASE("compilerPhase"),
 
     TRANSACTION_EXISTS("transactionBlockExists"),
@@ -38,7 +40,9 @@ public enum CompilerOptionName {
 
     TEST_ENABLED("testEnabled"),
 
-    TARGET_BINARY_PATH("targetBinaryPath");
+    TARGET_BINARY_PATH("targetBinaryPath"),
+
+    LOCK_ENABLED("testEnabled");
 
     public final String name;
 

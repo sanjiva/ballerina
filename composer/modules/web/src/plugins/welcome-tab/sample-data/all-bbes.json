@@ -118,6 +118,10 @@
       {
         "name": "Lengthof",
         "url": "lengthof"
+      },
+      {
+        "name": "Integer Ranges",
+        "url": "integer-ranges"
       }
     ]
   },
@@ -174,6 +178,44 @@
       {
         "name": "Try/Catch/Finally",
         "url": "try-catch-finally"
+      }
+    ]
+  },
+  {
+    "title": "Testing",
+    "column": 0,
+    "samples": [
+      {
+        "name": "Assertions",
+        "url": "testerina-assertions"
+      },
+      {
+        "name": "Before and After Test",
+        "url": "testerina-before-and-after-test"
+      },
+      {
+        "name": "Before Each Test",
+        "url": "testerina-before-each-test"
+      },
+      {
+        "name": "Before and After Suite",
+        "url": "testerina-before-and-after-suite"
+      },
+      {
+        "name": "Data Driven Tests",
+        "url": "testerina-data-driven-tests"
+      },
+      {
+        "name": "Guarantee Test Execution Order",
+        "url": "testerina-guarantee-test-execution-order"
+      },
+      {
+        "name": "Function Mocks",
+        "url": "testerina-function-mocks"
+      },
+      {
+        "name": "Group Tests",
+        "url": "testerina-group-tests"
       }
     ]
   },
@@ -348,6 +390,32 @@
       {
         "name": "Taint Checking",
         "url": "taint-checking"
+      },
+      {
+        "name": "Secured Service With JWT",
+        "url": "secured-service-with-jwt"
+      },
+      {
+        "name": "Secured Service With Basic Auth",
+        "url": "secured-service-with-basic-auth"
+      }
+    ]
+  },
+  {
+    "title": "Swagger ",
+    "column": 1,
+    "samples": [
+      {
+        "name": "Client Generation",
+        "url": "client-generation"
+      },
+      {
+        "name": "Ballerina To Swagger",
+        "url": "ballerina-to-swagger"
+      },
+      {
+        "name": "Swagger To Ballerina",
+        "url": "swagger-to-ballerina"
       }
     ]
   },
@@ -422,6 +490,14 @@
       {
         "name": "100 Continue",
         "url": "http-100-continue"
+      },
+      {
+        "name": "Handling Different Payload Types",
+        "url": "different-payload-types"
+      },
+      {
+        "name": "HTTP Streaming",
+        "url": "http-streaming"
       }
     ]
   },
@@ -462,7 +538,7 @@
     ]
   },
   {
-    "title": "Simple Integration Reference",
+    "title": "Routing",
     "column": 2,
     "samples": [
       {
@@ -476,10 +552,6 @@
       {
         "name": "Content Based Routing",
         "url": "content-based-routing"
-      },
-      {
-        "name": "Secured Service With Basic Auth",
-        "url": ""
       }
     ]
   },
@@ -534,7 +606,7 @@
         "url": "grpc-secured-unary"
       },
       {
-        "name": "Protobuff-tool",
+        "name": "Proto To Ballerina",
         "url": "proto-to-ballerina"
       }
     ]
@@ -554,24 +626,6 @@
       {
         "name": "WebSub Hub Client Sample",
         "url": "websub-hub-client-sample"
-      }
-    ]
-  },
-  {
-    "title": "Swagger ",
-    "column": 2,
-    "samples": [
-      {
-        "name": "Client Generation",
-        "url": "client-generation"
-      },
-      {
-        "name": "Ballerina To Swagger",
-        "url": "ballerina-to-swagger"
-      },
-      {
-        "name": "Swagger To Ballerina",
-        "url": "swagger-to-ballerina"
       }
     ]
   },
@@ -646,10 +700,6 @@
       {
         "name": "Math",
         "url": "math-functions"
-      },
-      {
-        "name": "XML Functions",
-        "url": "xml-functions"
       },
       {
         "name": "String ",
@@ -768,50 +818,30 @@
     ]
   },
   {
-    "title": "Testing",
-    "column": 3,
-    "samples": [
-      {
-        "name": "Assertions",
-        "url": "testerina-assertions"
-      },
-      {
-        "name": "Before and After Test",
-        "url": "testerina-before-and-after-test"
-      },
-      {
-        "name": "Before Each Test",
-        "url": "testerina-before-each-test"
-      },
-      {
-        "name": "Before and After Suite",
-        "url": "testerina-before-and-after-suite"
-      },
-      {
-        "name": "Data Driven Tests",
-        "url": "testerina-data-driven-tests"
-      },
-      {
-        "name": "Guarantee Test Execution Order",
-        "url": "testerina-guarantee-test-execution-order"
-      },
-      {
-        "name": "Function Mocks",
-        "url": "testerina-function-mocks"
-      },
-      {
-        "name": "Group Tests",
-        "url": "testerina-group-tests"
-      }
-    ]
-  },
-  {
     "title": "Listeners",
     "column": 3,
     "samples": [
       {
         "name": "Directory Listener",
         "url": "directory-listener"
+      }
+    ]
+  },
+  {
+    "title": "Observability",
+    "column": 3,
+    "samples": [
+      {
+        "name": "Distributed Tracing",
+        "url": "tracing"
+      },
+      {
+        "name": "Counter based Metrics",
+        "url": "counter-metrics"
+      },
+      {
+        "name": "Gauge based Metrics",
+        "url": "gauge-metrics"
       }
     ]
   }

@@ -37,17 +37,33 @@ public class UtilSymbolKeys {
 
     public static final String DOT_SYMBOL_KEY = ".";
 
+    public static final String COMMA_SYMBOL_KEY = ",";
+
     public static final String ANNOTATION_START_SYMBOL_KEY = "@";
 
     public static final String SEMI_COLON_SYMBOL_KEY = ";";
 
     public static final String ACTION_INVOCATION_SYMBOL_KEY = "->";
+
+    public static final String EQUAL_SYMBOL_KEY = "=";
+
+    public static final String GT_SYMBOL_KEY = ">";
+
+    public static final String LT_SYMBOL_KEY = "<";
+
+    public static final String DOLLAR_SYMBOL_KEY = "$";
     // End non letter symbol keys
 
 
     public static final String ITR_OP_LAMBDA_PARAM_REPLACE_TOKEN = "%params%";
     
     public static final String ANON_STRUCT_CHECKER = "$anon";
+
+    public static final String ACTION_KEYWORD_KEY = "action";
+
+    public static final String ANY_KEYWORD_KEY = "any";
+    
+    public static final String CONNECTOR_KEYWORD_KEY = "connector";
 
     public static final String ENDPOINT_KEYWORD_KEY = "endpoint";
 
@@ -66,6 +82,8 @@ public class UtilSymbolKeys {
     public static final String NEW_KEYWORD_KEY = "new";
     
     public static final String IMPORT_KEYWORD_KEY = "import";
-    
+
+    public static final String SLASH_KEYWORD_KEY = "/";
+
     public static final String EP_OBJECT_IDENTIFIER = "getCallerActions";
 }

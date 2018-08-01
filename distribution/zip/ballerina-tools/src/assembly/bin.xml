@@ -26,6 +26,13 @@
     <fileSets>
         <fileSet>
             <directory>
+                ${project.build.directory}/lib
+            </directory>
+            <outputDirectory>lib</outputDirectory>
+            <fileMode>0444</fileMode>
+        </fileSet>
+        <fileSet>
+            <directory>
                 ${project.build.directory}/extracted-distributions/ballerina-zip/ballerina-${project.version}
             </directory>
             <outputDirectory>.</outputDirectory>
@@ -47,6 +54,12 @@
                 ${project.build.directory}/api-docs
             </directory>
             <outputDirectory>docs/api/ballerina</outputDirectory>
+        </fileSet>
+        <fileSet>
+            <directory>
+                ${project.build.directory}/ballerina-examples-zip/ballerina-examples-${ballerina.version}/examples
+            </directory>
+            <outputDirectory>docs/examples</outputDirectory>
         </fileSet>
     </fileSets>
 
@@ -76,7 +89,7 @@
             <fileMode>644</fileMode>
         </file>
         <file>
-            <source>README</source>
+            <source>README.md</source>
             <outputDirectory>.</outputDirectory>
             <filtered>true</filtered>
             <fileMode>644</fileMode>
@@ -99,6 +112,14 @@
         </file>
         <file>
             <source>
+                ${project.build.directory}/extracted-distributions/language-server-core-zip/target/lang-server-index.sql
+            </source>
+            <outputDirectory>lib/resources/composer</outputDirectory>
+            <filtered>true</filtered>
+            <fileMode>644</fileMode>
+        </file>
+        <file>
+            <source>
                 ${project.build.directory}/extracted-distributions/composer-server-distribution-jar/deployment.yaml
             </source>
             <outputDirectory>lib/resources/composer/services</outputDirectory>
@@ -114,6 +135,7 @@
                 <include>org.ballerinalang:ballerina-cli-utils:jar</include>
                 <include>org.ballerinalang:testerina-core:jar</include>
                 <include>org.ballerinalang:swagger-to-ballerina-generator:jar</include>
+                <include>org.ballerinalang:ballerina-packerina:jar</include>
                 <include>org.ballerinalang:protobuf-ballerina:jar</include>
                 <include>org.ballerinalang:ballerina-codegen:jar</include>
                 <include>org.ballerinalang:docerina:jar</include>

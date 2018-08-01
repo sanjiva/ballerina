@@ -35,7 +35,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 /**
- * This class is responsible of testing the ballerina samples
+ * This class is responsible of testing the ballerina samples.
  */
 public class TesterinaSamplesTest {
 
@@ -55,7 +55,7 @@ public class TesterinaSamplesTest {
         TesterinaRegistry.getInstance().setOrgName("$anon");
         BTestRunner runner = new BTestRunner();
         runner.runTest(testerinaRoot, new Path[] { Paths.get("functionTest") }, new ArrayList<>());
-        Assert.assertEquals(runner.getTesterinaReport().getTestSummary("functionTest", "passed"), 6);
+        Assert.assertEquals(runner.getTesterinaReport().getTestSummary("functionTest:0.0.0", "passed"), 6);
         // Reset the org name
     }
 
@@ -63,7 +63,8 @@ public class TesterinaSamplesTest {
     @Test
     public void assertSampleTest() {
         BTestRunner runner = new BTestRunner();
-        runner.runTest(testerinaRoot + "/features/", new Path[]{Paths.get("assertions.bal")}, new ArrayList<>());
+        runner.runTest(testerinaRoot + "/features/", new Path[]{Paths.get("assertions.bal")},
+                       new ArrayList<>());
         Assert.assertEquals(runner.getTesterinaReport().getTestSummary(".", "passed"), 14);
     }
 
@@ -71,7 +72,8 @@ public class TesterinaSamplesTest {
     @Test
     public void dataProviderSampleTest() {
         BTestRunner runner = new BTestRunner();
-        runner.runTest(testerinaRoot + "/features/", new Path[]{Paths.get("data-providers.bal")}, new ArrayList<>());
+        runner.runTest(testerinaRoot + "/features/", new Path[]{Paths.get("data-providers.bal")},
+                       new ArrayList<>());
         Assert.assertEquals(runner.getTesterinaReport().getTestSummary(".", "passed"), 4);
     }
 

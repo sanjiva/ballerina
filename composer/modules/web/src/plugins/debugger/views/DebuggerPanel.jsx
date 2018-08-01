@@ -94,10 +94,12 @@ class DebuggerPanel extends View {
             this.setState({
                 active: false,
                 isDebugging: false,
+                messages: [],
+                threadId: null,
             });
         });
 
-        this.props.DebugManager.on('active-debug-hit', (activeDebugHit) => {
+        this.props.DebugManager.on('active-debug-hit', (activeDebugHit = {}) => {
             this.setState({
                 threadId: activeDebugHit.threadId,
                 messages: this.props.DebugManager.debugHits,

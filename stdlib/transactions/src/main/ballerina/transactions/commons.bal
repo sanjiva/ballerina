@@ -125,7 +125,7 @@ function isValidCoordinationType(string coordinationType) returns boolean {
 
 function protocolCompatible(string coordinationType, Protocol[] participantProtocols) returns boolean {
     boolean participantProtocolIsValid = false;
-    string[] validProtocols = coordinationTypeToProtocolsMap[coordinationType];
+    string[] validProtocols = coordinationTypeToProtocolsMap[coordinationType] but { () => [] };
     foreach participantProtocol in participantProtocols {
         foreach validProtocol in validProtocols {
             if (participantProtocol.name == validProtocol) {
@@ -148,7 +148,7 @@ function respondToBadRequest(http:Listener conn, string msg) {
     http:Response res = new;  res.statusCode = http:BAD_REQUEST_400;
     RequestError err = {errorMessage:msg};
     json resPayload = check <json>err;
-    res.setJsonPayload(resPayload);
+    res.setJsonPayload(untaint resPayload);
     var resResult = ep->respond(res);
     match resResult {
         error respondErr => {
@@ -208,34 +208,36 @@ function registerLocalParticipantWithInitiator(string transactionId, int transac
     string participantId = getParticipantId(transactionBlockId);
     //TODO: Protocol name should be passed down from the transaction statement
     LocalProtocol participantProtocol = {name:PROTOCOL_DURABLE};
-    if (!initiatedTransactions.hasKey(transactionId)) {
-        error err = {message:"Transaction-Unknown. Invalid TID:" + transactionId};
-        return err;
-    } else {
-        TwoPhaseCommitTransaction initiatedTxn = initiatedTransactions[transactionId];
-        if (isRegisteredParticipant(participantId, initiatedTxn.participants)) { // Already-Registered
-            error err = {message:"Already-Registered. TID:" + transactionId + ",participant ID:" + participantId};
+    match (initiatedTransactions[transactionId]) {
+        () => {
+            error err = {message:"Transaction-Unknown. Invalid TID:" + transactionId};
             return err;
-        } else if (!protocolCompatible(initiatedTxn.coordinationType, [participantProtocol])) { // Invalid-Protocol
-            error err = {message:"Invalid-Protocol in local participant. TID:" + transactionId + ",participant ID:" +
-                participantId};
-            return err;
-        } else {
-
-            //Set initiator protocols
-            TwoPhaseCommitTransaction participatedTxn = new(transactionId, transactionBlockId);
-            //Protocol initiatorProto = {name: PROTOCOL_DURABLE, transactionBlockId:transactionBlockId};
-            //participatedTxn.coordinatorProtocols = [initiatorProto];
-
-            LocalParticipant participant = new(participantId, participatedTxn, [participantProtocol]);
-            initiatedTxn.participants[participantId] = <Participant>participant;
-
-            string participatedTxnId = getParticipatedTransactionId(transactionId, transactionBlockId);
-            participatedTransactions[participatedTxnId] = participatedTxn;
-            TransactionContext txnCtx = {transactionId:transactionId, transactionBlockId:transactionBlockId,
-                coordinationType:TWO_PHASE_COMMIT, registerAtURL:registerAtURL};
-            log:printInfo("Registered local participant: " + participantId + " for transaction:" + transactionId);
-            return txnCtx;
+        }
+        TwoPhaseCommitTransaction initiatedTxn => {
+            if (isRegisteredParticipant(participantId, initiatedTxn.participants)) { // Already-Registered
+                error err = {message:"Already-Registered. TID:" + transactionId + ",participant ID:" + participantId};
+                return err;
+            } else if (!protocolCompatible(initiatedTxn.coordinationType, [participantProtocol])) { // Invalid-Protocol
+                error err = {message:"Invalid-Protocol in local participant. TID:" + transactionId + ",participant ID:" +
+                    participantId};
+                return err;
+            } else {
+    
+                //Set initiator protocols
+                TwoPhaseCommitTransaction participatedTxn = new(transactionId, transactionBlockId);
+                //Protocol initiatorProto = {name: PROTOCOL_DURABLE, transactionBlockId:transactionBlockId};
+                //participatedTxn.coordinatorProtocols = [initiatorProto];
+    
+                LocalParticipant participant = new(participantId, participatedTxn, [participantProtocol]);
+                initiatedTxn.participants[participantId] = <Participant>participant;
+    
+                string participatedTxnId = getParticipatedTransactionId(transactionId, transactionBlockId);
+                participatedTransactions[participatedTxnId] = participatedTxn;
+                TransactionContext txnCtx = {transactionId:transactionId, transactionBlockId:transactionBlockId,
+                    coordinationType:TWO_PHASE_COMMIT, registerAtURL:registerAtURL};
+                log:printInfo("Registered local participant: " + participantId + " for transaction:" + transactionId);
+                return txnCtx;
+            }
         }
     }
 }
@@ -261,12 +263,19 @@ function getInitiatorClient(string registerAtURL) returns InitiatorClientEP {
         InitiatorClientEP initiatorEP = check <InitiatorClientEP>httpClientCache.get(registerAtURL);
         return initiatorEP;
     } else {
-        InitiatorClientEP initiatorEP = new;
-        InitiatorClientConfig config = {registerAtURL:registerAtURL,
-            timeoutMillis:120000, retryConfig:{count:5, interval:5000}};
-        initiatorEP.init(config);
-        httpClientCache.put(registerAtURL, initiatorEP);
-        return initiatorEP;
+        lock {
+            if (httpClientCache.hasKey(registerAtURL)) {
+                InitiatorClientEP initiatorEP = check <InitiatorClientEP>httpClientCache.get(registerAtURL);
+                return initiatorEP;
+            }
+            InitiatorClientEP initiatorEP = new;
+            InitiatorClientConfig config = { registerAtURL: registerAtURL,
+                timeoutMillis: 15000, retryConfig: { count: 2, interval: 5000 }
+            };
+            initiatorEP.init(config);
+            httpClientCache.put(registerAtURL, initiatorEP);
+            return initiatorEP;
+        }
     }
 }
 
@@ -275,12 +284,20 @@ function getParticipant2pcClient(string participantURL) returns Participant2pcCl
         Participant2pcClientEP participantEP = check <Participant2pcClientEP>httpClientCache.get(participantURL);
         return participantEP;
     } else {
-        Participant2pcClientEP participantEP = new;
-        Participant2pcClientConfig config = {participantURL:participantURL,
-            timeoutMillis:120000, retryConfig:{count:5, interval:5000}};
-        participantEP.init(config);
-        httpClientCache.put(participantURL, participantEP);
-        return participantEP;
+        lock {
+            if (httpClientCache.hasKey(participantURL)) {
+                Participant2pcClientEP participantEP = check <
+                Participant2pcClientEP>httpClientCache.get(participantURL);
+                return participantEP;
+            }
+            Participant2pcClientEP participantEP = new;
+            Participant2pcClientConfig config = { participantURL: participantURL,
+                timeoutMillis: 15000, retryConfig: { count: 2, interval: 5000 }
+            };
+            participantEP.init(config);
+            httpClientCache.put(participantURL, participantEP);
+            return participantEP;
+        }
     }
 }
 
@@ -341,6 +358,6 @@ function getParticipantId(int transactionBlockId) returns string {
     return participantId;
 }
 
-native function getAvailablePort() returns int;
+extern function getAvailablePort() returns int;
 
-native function getHostAddress() returns string;
+extern function getHostAddress() returns string;

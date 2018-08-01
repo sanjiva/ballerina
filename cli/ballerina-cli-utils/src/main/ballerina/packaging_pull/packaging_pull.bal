@@ -1,4 +1,3 @@
-
 import ballerina/internal;
 import ballerina/io;
 import ballerina/mime;
@@ -6,17 +5,45 @@ import ballerina/http;
 
 @final int MAX_INT_VALUE = 2147483647;
 @final string VERSION_REGEX = "(\\d+\\.)(\\d+\\.)(\\d+)";
+DefaultLogger logger;
+
+documentation {
+    This object denotes the default logger object used when pulling a package directly.
+
+    F{{offset}} - Offset from the terminal width.
+}
+type DefaultLogger object {
+    int offset = 0;
+    function formatLog(string msg) returns string {
+        return msg;
+    }
+};
+
+documentation {
+    This object denotes the build logger object used when pulling a package while building.
+
+    F{{offset}} - Offset from the terminal width.
+}
+type BuildLogger object {
+    int offset = 10;
+    function formatLog(string msg) returns string {
+        return "\t" + msg;
+    }
+};
 
 documentation {
     This function pulls a package from ballerina central.
 
     P{{definedEndpoint}} Endpoint defined with the proxy configurations
-    P{{url}} url to be invoked
+    P{{url}} Url to be invoked
     P{{dirPath}} Path of the directory to save the pulled package
     P{{pkgPath}} Package path
     P{{fileSeparator}} File separator based on the operating system
+    P{{terminalWidth}} Width of the terminal
+    P{{versionRange}} Supported version range
 }
-function pullPackage (http:Client definedEndpoint, string url, string dirPath, string pkgPath, string fileSeparator) {
+function pullPackage (http:Client definedEndpoint, string url, string dirPath, string pkgPath, string fileSeparator,
+                      string terminalWidth, string versionRange) {
     endpoint http:Client httpEndpoint = definedEndpoint;
     string fullPkgPath = pkgPath;
     string destDirPath = dirPath;
@@ -24,12 +51,12 @@ function pullPackage (http:Client definedEndpoint, string url, string dirPath, s
     req.addHeader("Accept-Encoding", "identity");
 
     http:Response httpResponse = new;
-    var result = httpEndpoint -> get("", request=req);
+    var result = httpEndpoint -> get(untaint versionRange, message=req);
 
     match result {
         http:Response response => httpResponse = response;
         error e => {
-            io:println("connection to the remote host failed : " + e.message);
+            io:println(logger.formatLog("connection to the remote host failed : " + e.message));
             return;
         }
     }
@@ -37,16 +64,15 @@ function pullPackage (http:Client definedEndpoint, string url, string dirPath, s
     http:Response res = new;
     string statusCode = <string> httpResponse.statusCode;
     if (statusCode.hasPrefix("5")) {
-        io:println("remote registry failed for url :" + url);
+        io:println(logger.formatLog("remote registry failed for url :" + url));
     } else if (statusCode != "200") {
         var jsonResponse = httpResponse.getJsonPayload();
         match jsonResponse {
             json resp => {
-                string message = resp.message.toString();
-                io:println(message);
+                io:println(logger.formatLog(resp.message.toString()));
             }
             error err => {
-                io:println("error occurred when pulling the package");
+                io:println(logger.formatLog("error occurred when pulling the package"));
             }
         }
     } else {
@@ -57,7 +83,7 @@ function pullPackage (http:Client definedEndpoint, string url, string dirPath, s
             contentLengthHeader = httpResponse.getHeader("content-length");
             pkgSize = check <int> contentLengthHeader;
         } else {
-            io:println("warning: package size information is missing from the remote repository");
+            io:println(logger.formatLog("warning: package size information is missing from remote repository"));
         }
 
         io:ByteChannel sourceChannel = check (httpResponse.getByteChannel());
@@ -66,36 +92,37 @@ function pullPackage (http:Client definedEndpoint, string url, string dirPath, s
         if (resolvedURI == "") {
             resolvedURI = url;
         }
-        
+
         string [] uriParts = resolvedURI.split("/");
         string pkgVersion = uriParts[lengthof uriParts - 2];
         boolean valid = check pkgVersion.matches(VERSION_REGEX);
 
-        if (valid) { 
+        if (valid) {
             string pkgName = fullPkgPath.substring(fullPkgPath.lastIndexOf("/") + 1, fullPkgPath.length());
             string archiveFileName = pkgName + ".zip";
 
             fullPkgPath = fullPkgPath + ":" + pkgVersion;
-            destDirPath = destDirPath + fileSeparator + pkgVersion;        
+            destDirPath = destDirPath + fileSeparator + pkgVersion;
             string destArchivePath = destDirPath  + fileSeparator + archiveFileName;
 
             if (!createDirectories(destDirPath)) {
                 internal:Path pkgArchivePath = new(destArchivePath);
-                if (internal:pathExists(pkgArchivePath)){
-                    io:println("package already exists in the home repository");
-                    return;                              
-                }        
+                if (pkgArchivePath.exists()){
+                    io:println(logger.formatLog("package already exists in the home repository"));
+                    return;
+                }
             }
 
             io:ByteChannel destDirChannel = getFileChannel(destArchivePath, io:WRITE);
             string toAndFrom = " [central.ballerina.io -> home repo]";
+            int rightMargin = 3;
+            int width = (check <int> terminalWidth) - rightMargin;
+            copy(pkgSize, sourceChannel, destDirChannel, fullPkgPath, toAndFrom, width);
 
-            copy(pkgSize, sourceChannel, destDirChannel, fullPkgPath, toAndFrom);
-                                
             closeChannel(destDirChannel);
             closeChannel(sourceChannel);
         } else {
-            io:println("package version could not be detected");
+            io:println(logger.formatLog("package version could not be detected"));
         }
     }
 }
@@ -107,20 +134,27 @@ function main(string... args){
     http:Client httpEndpoint;
     string host = args[4];
     string port = args[5];
+    boolean isBuild = <boolean>args[10];
+    if (isBuild) {
+        logger = new BuildLogger();
+    } else {
+        logger = new DefaultLogger();
+    }
+
     if (host != "" && port != "") {
         try {
-          httpEndpoint = defineEndpointWithProxy(args[0], host, port, args[6], args[7]);
+            httpEndpoint = defineEndpointWithProxy(args[0], host, port, args[6], args[7]);
         } catch (error err) {
-          io:println("failed to resolve host : " + host + " with port " + port);
-          return;
+            io:println(logger.formatLog("failed to resolve host : " + host + " with port " + port));
+            return;
         }
     } else  if (host != "" || port != "") {
-        io:println("both host and port should be provided to enable proxy");     
-        return;   
+        io:println(logger.formatLog("both host and port should be provided to enable proxy"));
+        return;
     } else {
         httpEndpoint = defineEndpointWithoutProxy(args[0]);
     }
-    pullPackage(httpEndpoint, args[0], args[1], args[2], args[3]);
+    pullPackage(httpEndpoint, args[0], args[1], args[2], args[3], args[8], args[9]);
 }
 
 documentation {
@@ -189,10 +223,10 @@ documentation {
 
     P{{channel}} Byte channel
     P{{numberOfBytes}} Number of bytes to be read
-    R{{}} Bytes read as a blob along with the number of bytes read.
+    R{{}} Read content as byte[] along with the number of bytes read.
 }
-function readBytes (io:ByteChannel channel, int numberOfBytes) returns (blob, int) {
-    blob bytes;
+function readBytes (io:ByteChannel channel, int numberOfBytes) returns (byte[], int) {
+    byte[] bytes;
     int numberOfBytesRead;
     (bytes, numberOfBytesRead) = check (channel.read(numberOfBytes));
     return (bytes, numberOfBytesRead);
@@ -202,11 +236,11 @@ documentation {
     This function will write the bytes from the byte channel.
 
     P{{channel}} Byte channel
-    P{{content}} Content to be written as a blob
+    P{{content}} Content to be written as a byte[]
     P{{startOffset}} Offset
     R{{}} number of bytes written.
 }
-function writeBytes (io:ByteChannel channel, blob content, int startOffset) returns (int) {
+function writeBytes (io:ByteChannel channel, byte[] content, int startOffset) returns int {
     int numberOfBytesWritten = check (channel.write(content, startOffset));
     return numberOfBytesWritten;
 }
@@ -219,12 +253,12 @@ documentation {
     P{{dest}} Byte channel of the destination folder
     P{{fullPkgPath}} Full package path
     P{{toAndFrom}} Pulled package details
+    P{{width}} Width of the terminal
 }
-function copy (int pkgSize, io:ByteChannel src, io:ByteChannel dest, string fullPkgPath, string toAndFrom) {
-    string truncatedFullPkgPath = truncateString(fullPkgPath);
-    string msg = truncatedFullPkgPath + toAndFrom;
+function copy (int pkgSize, io:ByteChannel src, io:ByteChannel dest, string fullPkgPath, string toAndFrom, int width) {
+    int terminalWidth = width - logger.offset;
     int bytesChunk = 8;
-    blob readContent;
+    byte[] readContent;
     int readCount = -1;
     float totalCount = 0.0;
     int numberOfBytesWritten = 0;
@@ -232,26 +266,32 @@ function copy (int pkgSize, io:ByteChannel src, io:ByteChannel dest, string full
     string equals = "==========";
     string tabspaces = "          ";
     boolean completed = false;
+    int rightMargin = 5;
+    int totalVal = 10;
+    int startVal = 0;
+    int rightpadLength = terminalWidth - equals.length() - tabspaces.length() - rightMargin;
     try {
         while (!completed) {
             (readContent, readCount) = readBytes(src, bytesChunk);
-            if (readCount <= 0) {
+            if (readCount <= startVal) {
                 completed = true;
             }
             if (dest != null) {
-                numberOfBytesWritten = writeBytes(dest, readContent, 0);
+                numberOfBytesWritten = writeBytes(dest, readContent, startVal);
             }
             totalCount = totalCount + readCount;
             float percentage = totalCount / pkgSize;
             noOfBytesRead = totalCount + "/" + pkgSize;
-            string bar = equals.substring(0, <int> (percentage * 10));
-            string spaces = tabspaces.substring(0, 10 - <int>(percentage * 10));
-            io:print("\r" + rightPad(msg, 100) + "[" + bar + ">" + spaces + "] " + <int>totalCount + "/" + pkgSize);
+            string bar = equals.substring(startVal, <int> (percentage * totalVal));
+            string spaces = tabspaces.substring(startVal, totalVal - <int>(percentage * totalVal));
+            string size = "[" + bar + ">" + spaces + "] " + <int>totalCount + "/" + pkgSize;
+            string msg = truncateString(fullPkgPath + toAndFrom, terminalWidth - size.length());
+            io:print("\r" + logger.formatLog(rightPad(msg, rightpadLength) + size));
         }
     } catch (error err) {
         io:println("");
     }
-    io:print("\r" + rightPad(fullPkgPath + toAndFrom, (115 + noOfBytesRead.length())) + "\n");
+    io:println("\r" + logger.formatLog(rightPad(fullPkgPath + toAndFrom, terminalWidth)));
 }
 
 documentation {
@@ -278,26 +318,18 @@ documentation {
     This function truncates the string.
 
     P{{text}} String to be truncated
+    P{{maxSize}} Maximum size of the log message printed
     R{{}} Truncated string.
 }
-function truncateString (string text) returns (string) {
-    int indexOfVersion = text.lastIndexOf(":");
-    string withoutVersion = text.substring(0, indexOfVersion);
-    string versionOfPkg = text.substring(indexOfVersion, text.length());
-    int minLength = 57;
-    int lengthWithoutVersion = withoutVersion.length();
-    if (lengthWithoutVersion > minLength) {
-        int noOfCharactersToBeRemoved = lengthWithoutVersion - minLength;
-        int half = noOfCharactersToBeRemoved / 2;
-        int middleOfWithoutVersion = lengthWithoutVersion / 2;
-        int leftFromMiddle = middleOfWithoutVersion - half;
-        int rightFromMiddle = middleOfWithoutVersion + half;
-
-        string truncatedLeftStr = withoutVersion.substring(0, leftFromMiddle);
-        string truncatedRightStr = withoutVersion.substring(rightFromMiddle, lengthWithoutVersion);
-
-        string truncatedStr = truncatedLeftStr + "…" + truncatedRightStr;
-        return truncatedStr + versionOfPkg;
+function truncateString (string text, int maxSize) returns (string) {
+    int lengthOfText = text.length();
+    if (lengthOfText > maxSize) {
+        int endIndex = 3;
+        if (maxSize > endIndex) {
+            endIndex = maxSize - endIndex;
+        }
+        string truncatedStr = text.substring(0, endIndex);
+        return truncatedStr + "…";
     }
     return text;
 }
@@ -310,9 +342,15 @@ documentation {
 }
 function createDirectories(string directoryPath) returns (boolean) {
     internal:Path dirPath = new(directoryPath);
-    if (!internal:pathExists(dirPath)){
-        boolean directoryCreationStatus = check (internal:createDirectory(dirPath));
-        return directoryCreationStatus;
+    if (!dirPath.exists()){
+        match dirPath.createDirectory() {
+            () => {
+                return true;
+            }
+            error => {
+                return false;
+            }
+        }
     } else {
         return false;
     }
@@ -326,7 +364,7 @@ documentation {
 function closeChannel(io:ByteChannel channel) {
     match channel.close() {
         error channelCloseError => {
-            io:println("Error occured while closing the channel: " + channelCloseError.message);
+            io:println(logger.formatLog("Error occured while closing the channel: " + channelCloseError.message));
         }
         () => return;
     }

@@ -26,6 +26,10 @@ public enum Flag {
      */
     PUBLIC,
     /**
+     * Indicates Flagged node is a public node.
+     */
+    PRIVATE,
+    /**
      * Indicates Flagged node is a native construct.
      */
     NATIVE,
@@ -75,4 +79,12 @@ public enum Flag {
      * Indicates Flagged type is a defaultable type.
      */
     DEFAULTABLE,
+    /**
+     * Temporary indicator for records.
+     */
+    RECORD,
+    /**
+     * Temporary indicator for compensation variables.
+     */
+    COMPENSATE,
 }

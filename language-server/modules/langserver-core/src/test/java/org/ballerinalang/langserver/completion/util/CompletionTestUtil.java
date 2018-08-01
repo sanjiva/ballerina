@@ -26,14 +26,12 @@ import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManager;
 import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManagerImpl;
 import org.ballerinalang.langserver.completions.CompletionCustomErrorStrategy;
 import org.ballerinalang.langserver.completions.CompletionKeys;
-import org.ballerinalang.langserver.completions.TreeVisitor;
-import org.ballerinalang.langserver.completions.resolvers.TopLevelResolver;
-import org.ballerinalang.langserver.completions.util.CompletionItemResolver;
+import org.ballerinalang.langserver.completions.CompletionSubRuleParser;
+import org.ballerinalang.langserver.completions.util.CompletionUtil;
 import org.eclipse.lsp4j.CompletionItem;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.TextDocumentIdentifier;
 import org.eclipse.lsp4j.TextDocumentPositionParams;
-import org.wso2.ballerinalang.compiler.tree.BLangNode;
 import org.wso2.ballerinalang.compiler.tree.BLangPackage;
 
 import java.nio.file.Path;
@@ -69,12 +67,13 @@ public class CompletionTestUtil {
     private static String getCompletionItemPropertyString(CompletionItem completionItem) {
 
         // TODO: Need to add kind and sort text as well
-        return "{" +
+        // Here we replace the Windows specific \r\n to \n for evaluation only
+        return ("{" +
                 completionItem.getInsertText() + "," +
                 completionItem.getDetail() + "," +
                 completionItem.getDocumentation() + "," +
                 completionItem.getLabel() +
-                "}";
+                "}").replace("\r\n", "\n");
     }
 
     private static List<String> getStringListForEvaluation(List<CompletionItem> completionItems) {
@@ -134,27 +133,16 @@ public class CompletionTestUtil {
         LSServiceOperationContext completionContext = new LSServiceOperationContext();
         completionContext.put(DocumentServiceKeys.POSITION_KEY, pos);
         completionContext.put(DocumentServiceKeys.FILE_URI_KEY, pos.getTextDocument().getUri());
+        completionContext.put(CompletionKeys.DOC_MANAGER_KEY, documentManager);
         BLangPackage bLangPackage = LSCompiler.getBLangPackage(completionContext, documentManager, false,
-                CompletionCustomErrorStrategy.class, false, completionContext).get(0);
+                CompletionCustomErrorStrategy.class, false).getRight();
         completionContext.put(DocumentServiceKeys.CURRENT_PACKAGE_NAME_KEY,
                               bLangPackage.symbol.getName().getValue());
-        // Visit the package to resolve the symbols
-        TreeVisitor treeVisitor = new TreeVisitor(completionContext);
-        bLangPackage.accept(treeVisitor);
+        completionContext.put(DocumentServiceKeys.CURRENT_BLANG_PACKAGE_CONTEXT_KEY, bLangPackage);
 
-        if (completionContext.get(CompletionKeys.SYMBOL_ENV_NODE_KEY) == null) {
-            treeVisitor.populateSymbols(treeVisitor.resolveAllVisibleSymbols(treeVisitor.getSymbolEnv()),
-                    treeVisitor.getSymbolEnv());
-        }
-
-        BLangNode symbolEnvNode = completionContext.get(CompletionKeys.SYMBOL_ENV_NODE_KEY);
-        if (symbolEnvNode instanceof BLangPackage) {
-            completions = CompletionItemResolver.getResolverByClass(TopLevelResolver.class)
-                    .resolveItems(completionContext);
-        } else {
-            completions = CompletionItemResolver.getResolverByClass(symbolEnvNode.getClass())
-                    .resolveItems(completionContext);
-        }
+        CompletionUtil.resolveSymbols(completionContext);
+        CompletionSubRuleParser.parse(completionContext);
+        completions = CompletionUtil.getCompletionItems(completionContext);
 
         return completions;
     }

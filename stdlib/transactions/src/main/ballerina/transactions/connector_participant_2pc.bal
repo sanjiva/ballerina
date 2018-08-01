@@ -16,10 +16,10 @@
 
 import ballerina/http;
 
-public type Participant2pcClientConfig {
+public type Participant2pcClientConfig record {
     string participantURL;
     int timeoutMillis;
-    {
+    record {
         int count;
         int interval;
     } retryConfig;
@@ -27,21 +27,19 @@ public type Participant2pcClientConfig {
 
 public type Participant2pcClientEP object {
 
-    private {
-        http:Client httpClient;
-        Participant2pcClientConfig conf;
-    }
+    http:Client httpClient;
+    Participant2pcClientConfig conf;
 
-    public function init(Participant2pcClientConfig conf) {
+    public function init(Participant2pcClientConfig c) {
         endpoint http:Client httpEP {
-            url:conf.participantURL,
-            timeoutMillis:conf.timeoutMillis,
+            url: c.participantURL,
+            timeoutMillis: c.timeoutMillis,
             retryConfig:{
-                count:conf.retryConfig.count, interval:conf.retryConfig.interval
+                count: c.retryConfig.count, interval: c.retryConfig.interval
             }
         };
         self.httpClient = httpEP;
-        self.conf = conf;
+        self.conf = c;
     }
 
     public function getCallerActions() returns Participant2pcClient {
@@ -53,9 +51,7 @@ public type Participant2pcClientEP object {
 
 public type Participant2pcClient object {
 
-    private {
-        Participant2pcClientEP clientEP;
-    }
+    Participant2pcClientEP clientEP;
 
     public function prepare(string transactionId) returns string|error {
         endpoint http:Client httpClient = self.clientEP.httpClient;
@@ -63,7 +59,7 @@ public type Participant2pcClient object {
         PrepareRequest prepareReq = {transactionId:transactionId};
         json j = check <json>prepareReq;
         req.setJsonPayload(j);
-        var result = httpClient->post("/prepare", request = req);
+        var result = httpClient->post("/prepare", req);
         http:Response res = check result;
         int statusCode = res.statusCode;
         if (statusCode == http:NOT_FOUND_404) {
@@ -86,7 +82,7 @@ public type Participant2pcClient object {
         NotifyRequest notifyReq = {transactionId:transactionId, message:message};
         json j = check <json>notifyReq;
         req.setJsonPayload(j);
-        var result = httpClient->post("/notify", request = req);
+        var result = httpClient->post("/notify", req);
         http:Response res = check result;
         json payload = check res.getJsonPayload();
         NotifyResponse notifyRes = <NotifyResponse>payload;

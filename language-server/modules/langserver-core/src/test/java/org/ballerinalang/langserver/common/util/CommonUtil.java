@@ -20,6 +20,8 @@ package org.ballerinalang.langserver.common.util;
 import com.google.gson.Gson;
 import org.ballerinalang.langserver.BallerinaLanguageServer;
 import org.eclipse.lsp4j.DidOpenTextDocumentParams;
+import org.eclipse.lsp4j.DocumentFormattingParams;
+import org.eclipse.lsp4j.FormattingOptions;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.ReferenceContext;
 import org.eclipse.lsp4j.ReferenceParams;
@@ -62,7 +64,8 @@ public class CommonUtil {
                 TextDocumentIdentifier identifier = new TextDocumentIdentifier();
                 identifier.setUri(Paths.get(file).toUri().toString());
                 positionParams.setTextDocument(identifier);
-                positionParams.setPosition(position);
+
+                positionParams.setPosition(new Position(position.getLine(), position.getCharacter()));
 
                 DidOpenTextDocumentParams documentParams = new DidOpenTextDocumentParams();
                 TextDocumentItem textDocumentItem = new TextDocumentItem();
@@ -82,7 +85,7 @@ public class CommonUtil {
                 ReferenceContext referenceContext = new ReferenceContext();
                 referenceContext.setIncludeDeclaration(true);
 
-                referenceParams.setPosition(position);
+                referenceParams.setPosition(new Position(position.getLine(), position.getCharacter()));
                 referenceParams.setTextDocument(textDocumentIdentifier);
                 referenceParams.setContext(referenceContext);
 
@@ -94,6 +97,28 @@ public class CommonUtil {
 
                 serviceEndpoint.notify("textDocument/didOpen", didOpenTextDocumentParams);
                 result = serviceEndpoint.request(method, referenceParams);
+                break;
+            case "textDocument/formatting":
+                DocumentFormattingParams documentFormattingParams = new DocumentFormattingParams();
+
+                TextDocumentIdentifier textDocumentIdentifier1 = new TextDocumentIdentifier();
+                textDocumentIdentifier1.setUri(Paths.get(file).toUri().toString());
+
+                FormattingOptions formattingOptions = new FormattingOptions();
+                formattingOptions.setInsertSpaces(true);
+                formattingOptions.setTabSize(4);
+
+                documentFormattingParams.setOptions(formattingOptions);
+                documentFormattingParams.setTextDocument(textDocumentIdentifier1);
+
+                DidOpenTextDocumentParams didOpenTextDocumentParams1 = new DidOpenTextDocumentParams();
+                TextDocumentItem textDocument1 = new TextDocumentItem();
+                textDocument1.setUri(textDocumentIdentifier1.getUri());
+                textDocument1.setText(fileContent);
+                didOpenTextDocumentParams1.setTextDocument(textDocument1);
+
+                serviceEndpoint.notify("textDocument/didOpen", didOpenTextDocumentParams1);
+                result = serviceEndpoint.request(method, documentFormattingParams);
                 break;
             default:
                 break;

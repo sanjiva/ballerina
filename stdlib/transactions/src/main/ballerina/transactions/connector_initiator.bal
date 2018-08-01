@@ -16,19 +16,17 @@
 
 import ballerina/http;
 
-type InitiatorClientConfig {
+type InitiatorClientConfig record {
     string registerAtURL;
     int timeoutMillis;
-    {
+    record {
         int count;
         int interval;
     } retryConfig;
 };
 
 type InitiatorClientEP object {
-    private {
-        http:Client httpClient;
-    }
+    http:Client httpClient;
 
     function init(InitiatorClientConfig conf) {
         endpoint http:Client httpEP {
@@ -49,9 +47,7 @@ type InitiatorClientEP object {
 };
 
 type InitiatorClient object {
-    private {
-        InitiatorClientEP clientEP;
-    }
+    InitiatorClientEP clientEP;
 
     new() {
 
@@ -69,7 +65,7 @@ type InitiatorClient object {
         json reqPayload = check <json>regReq;
         http:Request req = new;
         req.setJsonPayload(reqPayload);
-        var result = httpClient->post("", request = req);
+        var result = httpClient->post("", req);
         http:Response res = check result;
         int statusCode = res.statusCode;
         if (statusCode != http:OK_200) {

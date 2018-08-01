@@ -18,12 +18,23 @@
 package org.ballerinalang.langserver.completion.definitions;
 
 import org.ballerinalang.langserver.completion.CompletionTest;
+import org.ballerinalang.langserver.index.LSIndexImpl;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.DataProvider;
+
+import java.nio.file.Paths;
 
 /**
  * Completion item tests for resource definition.
  */
 public class ResourceDefinition extends CompletionTest {
+
+    @BeforeClass
+    private void initLSIndex() {
+        String indexDumpPath = Paths.get("target/lang-server-index.sql").toAbsolutePath().toString();
+        LSIndexImpl.getInstance().initFromIndexDump(indexDumpPath);
+    }
+
     @DataProvider(name = "completion-data-provider")
     @Override
     public Object[][] dataProvider() {
@@ -45,13 +56,8 @@ public class ResourceDefinition extends CompletionTest {
                 {"completionBeforeUnderscore1.json", "resource"},
                 {"completionBeforeUnderscore2.json", "resource"},
                 {"completionBeforeUnderscore3.json", "resource"},
-//                {"enumSuggestAssignment1.json", "resource"},
-//                {"enumSuggestAssignment2.json", "resource"},
-//                {"enumSuggestVarDef1.json", "resource"},
-//                {"enumSuggestVarDef2.json", "resource"},
-//                {"structFields.json", "resource"},
-//                {"structBoundFunctionsAndFields.json", "resource"},
-//                {"packageContentWithSucceedingCharacter1.json", "resource"}
+                {"matchExpressionSuggestion1.json", "resource"},
+                {"matchExpressionSuggestion2.json", "resource"}
         };
     }
 }

@@ -55,10 +55,10 @@
       "insertTextFormat":"Snippet"
     },
     {
-      "label":"type \u003cRecordName\u003e",
+      "label":"type \u003cRecordName\u003e record",
       "detail":"Snippet",
       "sortText":"190",
-      "insertText":"type ${1:RecordName} {\n\t${2}\n};",
+      "insertText":"type ${1:RecordName} record {\n\t${2}\n};",
       "insertTextFormat":"Snippet"
     },
     {
@@ -76,6 +76,13 @@
       "insertTextFormat":"Snippet"
     },
     {
+      "label":"public",
+      "detail":"Keyword",
+      "sortText":"210",
+      "insertText":"public ",
+      "insertTextFormat":"Snippet"
+    },
+    {
       "label":"xml",
       "detail":"BType",
       "sortText":"170",
@@ -86,6 +93,12 @@
       "detail":"BType",
       "sortText":"170",
       "insertText":"TableConfig"
+    },
+    {
+      "label":"byte",
+      "detail":"BType",
+      "sortText":"170",
+      "insertText":"byte"
     },
     {
       "label":"stream",
@@ -122,12 +135,6 @@
       "detail":"BType",
       "sortText":"170",
       "insertText":"float"
-    },
-    {
-      "label":"blob",
-      "detail":"BType",
-      "sortText":"170",
-      "insertText":"blob"
     },
     {
       "label":"null",

@@ -6,7 +6,9 @@ import org.ballerinalang.spi.EmbeddedExecutor;
 import org.ballerinalang.toml.model.Proxy;
 import org.ballerinalang.util.EmbeddedExecutorProvider;
 import org.wso2.ballerinalang.compiler.packaging.Patten;
+import org.wso2.ballerinalang.compiler.packaging.repo.CacheRepo;
 import org.wso2.ballerinalang.compiler.util.ProjectDirConstants;
+import org.wso2.ballerinalang.programfile.ProgramFileConstants;
 import org.wso2.ballerinalang.util.RepoUtils;
 
 import java.io.File;
@@ -23,11 +25,19 @@ import java.util.stream.Stream;
  */
 public class URIConverter implements Converter<URI> {
 
+    private static CacheRepo binaryRepo = new CacheRepo(RepoUtils.createAndGetHomeReposPath(),
+                                                        ProjectDirConstants.BALLERINA_CENTRAL_DIR_NAME);
     private final URI base;
+    private boolean isBuild = true;
     private PrintStream outStream = System.err;
 
     public URIConverter(URI base) {
         this.base = base;
+    }
+
+    public URIConverter(URI base, boolean isBuild) {
+        this.base = base;
+        this.isBuild = isBuild;
     }
 
     /**
@@ -56,7 +66,7 @@ public class URIConverter implements Converter<URI> {
     }
 
     @Override
-    public Stream<URI> latest(URI u) {
+    public Stream<URI> latest(URI u, PackageID packageID) {
         throw new UnsupportedOperationException();
     }
 
@@ -83,17 +93,18 @@ public class URIConverter implements Converter<URI> {
             String fullPkgPath = orgName + "/" + pkgName;
             Proxy proxy = RepoUtils.readSettings().getProxy();
 
+            String supportedVersionRange = "?supported-version-range=" + ProgramFileConstants.MIN_SUPPORTED_VERSION +
+                    "," + ProgramFileConstants.MAX_SUPPORTED_VERSION;
             EmbeddedExecutor executor = EmbeddedExecutorProvider.getInstance().getExecutor();
             executor.execute("packaging_pull/packaging_pull.balx", true, u.toString(), destDirPath.toString(),
                              fullPkgPath, File.separator, proxy.getHost(), proxy.getPort(), proxy.getUserName(),
-                             proxy.getPassword());
-            // TODO Simplify using ZipRepo
-            Patten pattern = new Patten(Patten.LATEST_VERSION_DIR,
-                                        Patten.path(pkgName + ".zip"),
-                                        Patten.path("src"), Patten.WILDCARD_SOURCE);
-            return pattern.convertToSources(new ZipConverter(destDirPath), packageID);
+                             proxy.getPassword(), RepoUtils.getTerminalWidth(), supportedVersionRange,
+                             String.valueOf(isBuild));
+
+            Patten patten = binaryRepo.calculate(packageID);
+            return patten.convertToSources(binaryRepo.getConverterInstance(), packageID);
         } catch (Exception e) {
-            outStream.println("Error occurred when pulling the remote artifact");
+            outStream.println(isBuild ? "    " : "" + "Error occurred when pulling the remote artifact");
         }
         return Stream.of();
     }

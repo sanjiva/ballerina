@@ -17,15 +17,19 @@
  */
 package org.ballerinalang.model.values;
 
-import org.ballerinalang.model.types.BMapType;
+import org.ballerinalang.model.types.BField;
+import org.ballerinalang.model.types.BStructureType;
 import org.ballerinalang.model.types.BType;
 import org.ballerinalang.model.types.BTypes;
-import org.ballerinalang.runtime.message.BallerinaMessageDataSource;
+import org.ballerinalang.model.types.TypeTags;
+import org.ballerinalang.model.util.Flags;
+import org.ballerinalang.model.util.JsonGenerator;
 import org.ballerinalang.util.exceptions.BallerinaException;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.charset.Charset;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -42,21 +46,38 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * @since 0.8.0
  */
 @SuppressWarnings("rawtypes")
-public class BMap<K, V extends BValue> extends BallerinaMessageDataSource implements BRefType, BCollection {
+public class BMap<K, V extends BValue> implements BRefType, BCollection {
 
     private LinkedHashMap<K, V> map;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final Lock readLock = lock.readLock();
     private final Lock writeLock = lock.writeLock();
     private BType type = BTypes.typeMap;
+    private HashMap<String, Object> nativeData = new HashMap<>();
 
     public BMap() {
         map =  new LinkedHashMap<>();
     }
 
-    public BMap(BMapType type) {
+    public BMap(BType type) {
         this.map = new LinkedHashMap<>();
         this.type = type;
+    }
+
+    /**
+     * Retrieve the value for the given key from map.
+     * A null will be returned if the key does not exists.
+     * 
+     * @param key key used to get the value
+     * @return value
+     */
+    public V get(K key) {
+        readLock.lock();
+        try {
+            return map.get(key);
+        } finally {
+            readLock.unlock();
+        }
     }
 
     /**
@@ -66,7 +87,7 @@ public class BMap<K, V extends BValue> extends BallerinaMessageDataSource implem
      * @param key key used to get the value
      * @return value
      */
-    public V get(K key) {
+    public V getIfExist(K key) {
         readLock.lock();
         try {
             if (!map.containsKey(key)) {
@@ -179,13 +200,30 @@ public class BMap<K, V extends BValue> extends BallerinaMessageDataSource implem
     }
 
     /**
-     * Retrieve the set of keys related to this map.
-     * @return returns the set of keys
+     * Retrieve the keys related to this map as an array.
+     * 
+     * @return keys as an array
      */
-    public Set<K> keySet() {
+    public K[] keys() {
         readLock.lock();
         try {
-            return map.keySet();
+            Set<K> keys = map.keySet();
+            return (K[]) keys.toArray(new String[keys.size()]);
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    /**
+     * Retrieve the value in the map as an array.
+     * 
+     * @return values as an array
+     */
+    public V[] values() {
+        readLock.lock();
+        try {
+            Collection<V> values = map.values();
+            return (V[]) values.toArray(new BRefType[values.size()]);
         } finally {
             readLock.unlock();
         }
@@ -212,33 +250,36 @@ public class BMap<K, V extends BValue> extends BallerinaMessageDataSource implem
     @Override
     public String stringValue() {
         readLock.lock();
+        StringJoiner sj = new StringJoiner(", ", "{", "}");
         try {
-            StringJoiner sj = new StringJoiner(", ", "{", "}");
-    
-            for (Iterator<Map.Entry<K, V>> i = map.entrySet().iterator(); i.hasNext();) {
-    
-                String key;
-                String stringValue;
-    
-                Map.Entry<K, V> e = i.next();
-                key = "\"" + (String) e.getKey() + "\"";
-                V value = e.getValue();
-    
-                if (value == null) {
-                    stringValue = null;
-                } else if (value instanceof BString) {
-                    stringValue = "\"" + value.stringValue() + "\"";
-                } else {
-                    stringValue = value.stringValue();
-                }
-    
-                sj.add(key + ":" + stringValue);
+            switch (type.getTag()) {
+                case TypeTags.OBJECT_TYPE_TAG:
+                    for (BField field : ((BStructureType) this.type).getFields()) {
+                        if (!Flags.isFlagOn(field.flags, Flags.PUBLIC)) {
+                            continue;
+                        }
+                        String fieldName = field.getFieldName();
+                        V fieldVal = get((K) fieldName);
+                        sj.add(fieldName + ":" + getStringValue(fieldVal));
+                    }
+                    break;
+                case TypeTags.JSON_TAG:
+                    return getJSONString();
+                default:
+                    String keySeparator = type.getTag() == TypeTags.MAP_TAG ? "\"" : "";
+                    for (Iterator<Map.Entry<K, V>> i = map.entrySet().iterator(); i.hasNext();) {
+                        String key;
+                        Map.Entry<K, V> e = i.next();
+                        key = keySeparator + (String) e.getKey() + keySeparator;
+                        V value = e.getValue();
+                        sj.add(key + ":" + getStringValue(value));
+                    }
+                    break;
             }
             return sj.toString();
         } finally {
             readLock.unlock();
         }
-
     }
 
     @Override
@@ -258,20 +299,6 @@ public class BMap<K, V extends BValue> extends BallerinaMessageDataSource implem
             return newMap;
         } finally {
             readLock.unlock();
-        }
-    }
-
-    @Override
-    public String getMessageAsString() {
-        return stringValue();
-    }
-
-    @Override
-    public void serializeData(OutputStream outputStream) {
-        try {
-            outputStream.write(stringValue().getBytes(Charset.defaultCharset()));
-        } catch (IOException e) {
-            throw new BallerinaException("Error occurred while serializing data", e);
         }
     }
 
@@ -309,5 +336,51 @@ public class BMap<K, V extends BValue> extends BallerinaMessageDataSource implem
             return iterator.hasNext();
         }
     }
-}
 
+    /**
+     * Add natively accessible data.
+     *
+     * @param key key to store data with
+     * @param data data to be stored
+     */
+    public void addNativeData(String key, Object data) {
+        this.nativeData.put(key, data);
+    }
+
+    /**
+     * Get natively accessible data.
+     *
+     * @param key key by which data was stored
+     * @return data which was stored with given key or null if no value corresponding to key
+     */
+    public Object getNativeData(String key) {
+        return this.nativeData.get(key);
+    }
+
+    @Override
+    public String toString() {
+        return stringValue();
+    }
+
+    private String getStringValue(V value) {
+        if (value == null) {
+            return null;
+        } else if (value instanceof BString) {
+            return "\"" + value.stringValue() + "\"";
+        } else {
+            return value.stringValue();
+        }
+    }
+
+    private String getJSONString() {
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        JsonGenerator gen = new JsonGenerator(byteOut);
+        try {
+            gen.serialize(this);
+            gen.flush();
+        } catch (IOException e) {
+            throw new BallerinaException("Error in converting JSON to a string: " + e.getMessage(), e);
+        }
+        return new String(byteOut.toByteArray());
+    }
+}

@@ -25,11 +25,13 @@ import DebugManager from './DebugManager';
 function saveFile(dispatch, activeEditor, onSaveSuccess) {
     if (!activeEditor.file.isDirty) {
         onSaveSuccess();
+    } else {
+        dispatch(WORKSPACE_COMMANDS.SAVE_FILE, {
+            file: activeEditor.file,
+            onSaveSuccess,
+        });
     }
-    dispatch(WORKSPACE_COMMANDS.SAVE_FILE, {
-        file: activeEditor.file,
-        onSaveSuccess,
-    });
+
 }
 
 /**
@@ -82,6 +84,15 @@ export function getHandlerDefinitions(debuggerPlugin) {
                             debuggerPlugin.getArgumentConfigs(activeEditor.file));
                     });
                     dispatch('debugger-run-executed', activeEditor.file);
+                }
+            },
+        },
+        {
+            cmdID: COMMANDS.INPUT,
+            handler: (input) => {
+                const activeEditor = debuggerPlugin.appContext.editor.getActiveEditor();
+                if (activeEditor && activeEditor.file) {
+                    LaunchManager.sendInput(activeEditor.file, input);
                 }
             },
         },

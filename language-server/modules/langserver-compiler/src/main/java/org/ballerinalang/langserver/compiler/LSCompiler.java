@@ -15,12 +15,12 @@
  */
 package org.ballerinalang.langserver.compiler;
 
-import com.google.common.io.Files;
 import org.antlr.v4.runtime.DefaultErrorStrategy;
 import org.ballerinalang.compiler.CompilerPhase;
 import org.ballerinalang.langserver.compiler.common.CustomErrorStrategyFactory;
 import org.ballerinalang.langserver.compiler.common.LSDocument;
 import org.ballerinalang.langserver.compiler.common.modal.BallerinaFile;
+import org.ballerinalang.langserver.compiler.workspace.ExtendedWorkspaceDocumentManagerImpl;
 import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManager;
 import org.ballerinalang.langserver.compiler.workspace.repository.LangServerFSProgramDirectory;
 import org.ballerinalang.langserver.compiler.workspace.repository.LangServerFSProjectDirectory;
@@ -29,6 +29,7 @@ import org.ballerinalang.model.elements.PackageID;
 import org.ballerinalang.repository.PackageRepository;
 import org.ballerinalang.util.diagnostic.Diagnostic;
 import org.ballerinalang.util.diagnostic.DiagnosticListener;
+import org.eclipse.lsp4j.jsonrpc.messages.Either;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.wso2.ballerinalang.compiler.Compiler;
@@ -47,6 +48,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -69,17 +71,19 @@ import static org.ballerinalang.compiler.CompilerOptionName.TEST_ENABLED;
 public class LSCompiler {
 
     private static final Logger logger = LoggerFactory.getLogger(LSCompiler.class);
+    
+    private static final String BAL_EXTENSION = ".bal";
 
     public static final String UNTITLED_BAL = "untitled.bal";
 
     private static Path untitledProjectPath;
 
     private static final Pattern untitledFilePattern =
-            Pattern.compile("^(?:file:\\/\\/)?\\/temp\\/(.*)\\/untitled.bal");
+            Pattern.compile(".*[/\\\\]temp[/\\\\](.*)[/\\\\]untitled.bal");
 
     static {
         // Here we will create a tmp directory as the untitled project repo.
-        File untitledDir = Files.createTempDir();
+        File untitledDir = com.google.common.io.Files.createTempDir();
         untitledProjectPath = untitledDir.toPath();
         // Now lets create a empty untitled.bal to fool compiler.
         File untitledBal = new File(Paths.get(untitledProjectPath.toString(), UNTITLED_BAL).toString());
@@ -107,26 +111,39 @@ public class LSCompiler {
     /**
      * Returns a BallerinaFile compiling in-memory content.
      *
-     * @param content
-     * @param phase
-     * @return
+     * @param content       Content to be compiled
+     * @param phase         Compiler Phase
+     * @return {@link BallerinaFile}    BallerinaFile containing the compiled package
      */
     public BallerinaFile compileContent(String content, CompilerPhase phase, boolean preserveWhitespace) {
         java.nio.file.Path filePath = createAndGetTempFile(UNTITLED_BAL);
         Optional<Lock> fileLock = documentManager.lockFile(filePath);
+
+        // If the Extended workspace document manager is use enable explicit mode.
+        ExtendedWorkspaceDocumentManagerImpl exDocManager = null;
+        if (documentManager instanceof  ExtendedWorkspaceDocumentManagerImpl) {
+            exDocManager = (ExtendedWorkspaceDocumentManagerImpl) documentManager;
+        }
+
         try {
+            if (null != exDocManager) {
+                exDocManager.enableExplicitMode(filePath);
+            }
+
             if (documentManager.isFileOpen(filePath)) {
                 documentManager.updateFile(filePath, content);
             } else {
                 documentManager.openFile(filePath, content);
             }
 
-            BallerinaFile ballerinaFile = LSCompiler.compile(filePath, phase, documentManager, preserveWhitespace,
-                    null);
+            BallerinaFile ballerinaFile = LSCompiler.compile(filePath, phase, documentManager, preserveWhitespace);
 
             documentManager.closeFile(filePath);
             return ballerinaFile;
         } finally {
+            if (null != exDocManager) {
+                exDocManager.disableExplicitMode();
+            }
             fileLock.ifPresent(Lock::unlock);
         }
     }
@@ -149,7 +166,7 @@ public class LSCompiler {
             } else {
                 documentManager.openFile(filePath, content);
             }
-            return LSCompiler.compile(filePath, phase, documentManager, preserveWhitespace, null);
+            return LSCompiler.compile(filePath, phase, documentManager, preserveWhitespace);
         } finally {
             lock.ifPresent(Lock::unlock);
         }
@@ -166,10 +183,9 @@ public class LSCompiler {
      */
     public static CompilerContext prepareCompilerContext(PackageID packageID, PackageRepository packageRepository,
                                                          LSDocument sourceRoot, boolean preserveWhitespace,
-                                                         WorkspaceDocumentManager documentManager,
-                                                         LSContext lsContext) {
+                                                         WorkspaceDocumentManager documentManager) {
         return prepareCompilerContext(packageID, packageRepository, sourceRoot, preserveWhitespace, documentManager,
-                                      CompilerPhase.TAINT_ANALYZE, lsContext);
+                                      CompilerPhase.TAINT_ANALYZE);
     }
 
     /**
@@ -184,7 +200,7 @@ public class LSCompiler {
     public static CompilerContext prepareCompilerContext(PackageID packageID, PackageRepository packageRepository,
                                                          LSDocument sourceRoot, boolean preserveWhitespace,
                                                          WorkspaceDocumentManager documentManager,
-                                                         CompilerPhase compilerPhase, LSContext lsContext) {
+                                                         CompilerPhase compilerPhase) {
         LSContextManager lsContextManager = LSContextManager.getInstance();
         CompilerContext context = lsContextManager.getCompilerContext(packageID, sourceRoot.getSourceRoot());
         context.put(PackageRepository.class, packageRepository);
@@ -205,17 +221,17 @@ public class LSCompiler {
         if (isProjectDir(sourceRoot.getSourceRoot(), sourceRoot.getURIString())) {
             context.put(SourceDirectory.class,
                         LangServerFSProjectDirectory.getInstance(context, sourceRoot.getSourceRootPath(),
-                                documentManager, lsContext));
+                                documentManager));
         } else {
             context.put(SourceDirectory.class,
                         LangServerFSProgramDirectory.getInstance(context, sourceRoot.getSourceRootPath(),
-                                documentManager, lsContext));
+                                documentManager));
         }
         return context;
     }
 
     private static BallerinaFile compile(Path path, CompilerPhase phase, WorkspaceDocumentManager documentManager,
-                                         boolean preserveWhiteSpace, LSContext lsContext) {
+                                         boolean preserveWhiteSpace) {
         String sourceRoot = getSourceRoot(path);
         String pkgName = getPackageNameForGivenFile(sourceRoot, path.toString());
         LSDocument sourceDocument = new LSDocument();
@@ -232,7 +248,7 @@ public class LSCompiler {
             }
         }
         CompilerContext context = prepareCompilerContext(packageID, packageRepository, sourceDocument,
-                preserveWhiteSpace, documentManager, phase, lsContext);
+                preserveWhiteSpace, documentManager, phase);
 
         // In order to capture the syntactic errors, need to go through the default error strategy
         context.put(DefaultErrorStrategy.class, null);
@@ -271,17 +287,18 @@ public class LSCompiler {
     /**
      * Get the BLangPackage for a given program.
      *
-     * @param context             Language Server Context
-     * @param docManager          Document manager
-     * @param preserveWhitespace  Enable preserve whitespace
-     * @param customErrorStrategy custom error strategy class
-     * @param compileFullProject  compile full project from the source root
-     * @return {@link BLangPackage} BLang Package
+     * @param context                   Language Server Context
+     * @param docManager                Document manager
+     * @param preserveWhitespace        Enable preserve whitespace
+     * @param customErrorStrategy       custom error strategy class
+     * @param compileFullProject        compile full project from the source root
+     * @return {@link Either}           Either single BLang Package or a list of packages when compile full project
      */
-    public static List<BLangPackage> getBLangPackage(LSContext context,
-                                                                  WorkspaceDocumentManager docManager,
-                                                                  boolean preserveWhitespace, Class customErrorStrategy,
-                                                                  boolean compileFullProject, LSContext lsContext) {
+    public static Either<List<BLangPackage>, BLangPackage> getBLangPackage(LSContext context,
+                                                             WorkspaceDocumentManager docManager,
+                                                             boolean preserveWhitespace,
+                                                             Class customErrorStrategy,
+                                                             boolean compileFullProject) {
         String uri = context.get(DocumentServiceKeys.FILE_URI_KEY);
         String unsavedFileId = LSCompiler.getUnsavedFileIdOrNull(uri);
         if (unsavedFileId != null) {
@@ -299,24 +316,22 @@ public class LSCompiler {
 
         String sourceRoot = LSCompiler.getSourceRoot(filePath);
         String pkgName = LSCompiler.getPackageNameForGivenFile(sourceRoot, filePath.toString());
-        LSDocument sourceDocument = new LSDocument();
-        sourceDocument.setUri(uri);
-        sourceDocument.setSourceRoot(sourceRoot);
+        LSDocument sourceDocument = new LSDocument(uri, sourceRoot);
 
         PackageRepository packageRepository = new WorkspacePackageRepository(sourceRoot, docManager);
-        List<BLangPackage> packages = new ArrayList<>();
         if (compileFullProject) {
+            List<BLangPackage> packages = new ArrayList<>();
             if (!sourceRoot.isEmpty()) {
                 File projectDir = new File(sourceRoot);
                 File[] files = projectDir.listFiles();
                 if (files != null) {
                     for (File file : files) {
                         if ((file.isDirectory() && !file.getName().startsWith(".")) ||
-                                (!file.isDirectory() && file.getName().endsWith(".bal"))) {
+                                (!file.isDirectory() && file.getName().endsWith(BAL_EXTENSION))) {
                             PackageID packageID = new PackageID(fileName);
                             CompilerContext compilerContext =
                                     LSCompiler.prepareCompilerContext(packageID, packageRepository, sourceDocument,
-                                                                      preserveWhitespace, docManager, lsContext);
+                                                                      preserveWhitespace, docManager);
                             Compiler compiler = getCompiler(context, fileName, compilerContext, customErrorStrategy);
                             BLangPackage bLangPackage = compiler.compile(file.getName());
                             packages.add(bLangPackage);
@@ -325,9 +340,11 @@ public class LSCompiler {
                     }
                 }
             }
+
+            return Either.forLeft(packages);
         } else {
             PackageID packageID;
-            if ("".equals(pkgName)) {
+            if (pkgName.isEmpty()) {
                 packageID = new PackageID(fileName);
                 pkgName = fileName;
             } else {
@@ -335,13 +352,13 @@ public class LSCompiler {
             }
             CompilerContext compilerContext =
                     LSCompiler.prepareCompilerContext(packageID, packageRepository, sourceDocument,
-                                                      preserveWhitespace, docManager, lsContext);
+                                                      preserveWhitespace, docManager);
             Compiler compiler = getCompiler(context, fileName, compilerContext, customErrorStrategy);
             BLangPackage bLangPackage = compiler.compile(pkgName);
-            packages.add(bLangPackage);
             LSPackageCache.getInstance(compilerContext).invalidate(bLangPackage.packageID);
+            
+            return Either.forRight(bLangPackage);
         }
-        return packages;
     }
 
 
@@ -351,22 +368,50 @@ public class LSCompiler {
      * @param parentDir current parent directory
      * @return {@link String} project root | null
      */
-    public static String findProjectRoot(String parentDir) {
+    private static String findProjectRoot(String parentDir) {
         return findProjectRoot(parentDir, RepoUtils.createAndGetHomeReposPath());
     }
 
     @CheckForNull
-    public static String findProjectRoot(String parentDir, Path homePath) {
-        Path path = Paths.get(parentDir, ProjectDirConstants.DOT_BALLERINA_DIR_NAME);
-        if (!path.equals(homePath) && java.nio.file.Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+    private static String findProjectRoot(String parentDir, Path balHomePath) {
+        if (parentDir == null) {
+            return null;
+        }
+        Path pathWithDotBal = null;
+        boolean pathWithDotBalExists = false;
+
+        // Go to top till you find a project directory or ballerina home
+        while (!pathWithDotBalExists && parentDir != null) {
+            pathWithDotBal = Paths.get(parentDir, ProjectDirConstants.DOT_BALLERINA_DIR_NAME);
+            pathWithDotBalExists = Files.exists(pathWithDotBal, LinkOption.NOFOLLOW_LINKS);
+            if (!pathWithDotBalExists) {
+                Path parentsParent = Paths.get(parentDir).getParent();
+                parentDir = (parentsParent != null) ? parentsParent.toString() : null;
+            }
+        }
+
+        boolean balHomeExists = Files.exists(balHomePath, LinkOption.NOFOLLOW_LINKS);
+
+        // Check if you find ballerina home if so return null.
+        if (pathWithDotBalExists && balHomeExists && isSameFile(pathWithDotBal, balHomePath)) {
+            return null;
+        }
+
+        // Else return the project directory.
+        if (pathWithDotBalExists) {
             return parentDir;
+        } else {
+            // If no directory found return null.
+            return null;
         }
-        Path parent = Paths.get(parentDir);
-        Path parentsParent = parent.getParent();
-        if (null != parentsParent) {
-            return findProjectRoot(parentsParent.toString(), homePath);
+    }
+
+    private static boolean isSameFile(Path path1, Path path2) {
+        try {
+            return path1.equals(path2) || Files.isSameFile(path1, path2);
+        } catch (IOException e) {
+            return false;
         }
-        return null;
     }
 
     /**

@@ -110,6 +110,7 @@ class PanelDecorator extends React.Component {
                 },
                 icon: (collapsed) ? ImageUtil.getCodePoint('down') : ImageUtil.getCodePoint('up'),
                 onClick: () => this.onCollapseClick(),
+                tooltip: 'collapse',
                 key: `${this.props.model.getID()}-collapse-button`,
             };
 
@@ -133,7 +134,6 @@ class PanelDecorator extends React.Component {
         staticButtons.push(React.createElement(PanelDecoratorButton, deleteButtonProps, null));
 
         if ((!TreeUtils.isMainFunction(this.props.model) && TreeUtils.isFunction(this.props.model)) ||
-            TreeUtils.isStruct(this.props.model) || TreeUtils.isConnector(this.props.model) ||
             TreeUtils.isTransformer(this.props.model)) {
             // Toggle button for public/private flag
             const publicPrivateFlagButtonProps = {
@@ -161,7 +161,7 @@ class PanelDecorator extends React.Component {
             };
             return React.createElement(rightComponent.component, rightComponent.props, null);
         });
-        if (this.context.fitToWidth) {
+        if (this.context.editMode) {
             return [];
         } else {
             return [...staticButtons, ...dynamicButtons];
@@ -290,7 +290,6 @@ class PanelDecorator extends React.Component {
         }
         let allowPublicPrivateFlag = false;
         if ((!TreeUtils.isMainFunction(this.props.model) && TreeUtils.isFunction(this.props.model)) ||
-            TreeUtils.isStruct(this.props.model) ||
             TreeUtils.isTransformer(this.props.model)) {
             allowPublicPrivateFlag = this.props.model.public;
             if (this.props.model.public) {
@@ -457,12 +456,12 @@ PanelDecorator.defaultProps = {
     receiver: undefined,
     headerComponent: undefined,
     packageIdentifier: undefined,
-    fitToWidth: true,
+    editMode: true,
 };
 
 PanelDecorator.contextTypes = {
     editor: PropTypes.instanceOf(Object).isRequired,
-    fitToWidth: PropTypes.bool,
+    editMode: PropTypes.bool,
 };
 
 export default PanelDecorator;

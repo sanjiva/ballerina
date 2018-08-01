@@ -43,8 +43,8 @@ import org.ballerinalang.langserver.compiler.common.modal.BallerinaFile;
 import org.ballerinalang.langserver.compiler.workspace.ExtendedWorkspaceDocumentManagerImpl;
 import org.ballerinalang.langserver.compiler.workspace.WorkspaceDocumentManager;
 import org.ballerinalang.model.Whitespace;
+import org.ballerinalang.model.elements.AttachPoint;
 import org.ballerinalang.model.elements.Flag;
-import org.ballerinalang.model.tree.IdentifierNode;
 import org.ballerinalang.model.tree.Node;
 import org.ballerinalang.model.tree.NodeKind;
 import org.ballerinalang.model.tree.OperatorKind;
@@ -53,14 +53,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.wso2.ballerinalang.compiler.semantics.model.types.BType;
 import org.wso2.ballerinalang.compiler.tree.BLangAnnotation;
-import org.wso2.ballerinalang.compiler.tree.BLangAnnotationAttachmentPoint;
 import org.wso2.ballerinalang.compiler.tree.BLangCompilationUnit;
 import org.wso2.ballerinalang.compiler.tree.BLangFunction;
 import org.wso2.ballerinalang.compiler.tree.BLangNode;
 import org.wso2.ballerinalang.compiler.tree.BLangPackage;
-import org.wso2.ballerinalang.compiler.tree.BLangStruct;
 import org.wso2.ballerinalang.compiler.tree.expressions.BLangInvocation;
-
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -73,12 +70,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.locks.Lock;
 import java.util.stream.Collectors;
+
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.OPTIONS;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
@@ -122,6 +121,73 @@ public class BallerinaParserService implements ComposerService {
         // add package info into response
         Gson gson = new Gson();
         String json = gson.toJson(ParserUtils.getAllPackages().values());
+        JsonParser parser = new JsonParser();
+        JsonArray packagesArray = parser.parse(json).getAsJsonArray();
+        response.add("packages", packagesArray);
+        return Response.status(Response.Status.OK)
+                .entity(response)
+                .header("Access-Control-Allow-Origin", '*').type(MediaType.APPLICATION_JSON).build();
+    }
+
+    @OPTIONS
+    @Path("/endpoints")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getEndpointOptions() {
+        return Response.ok()
+                .header(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE.toString(), "600 ")
+                .header(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN.toString(), "*")
+                .header(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS.toString(), "true")
+                .header(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS.toString(),
+                        "POST, GET, PUT, UPDATE, DELETE, OPTIONS, HEAD")
+                .header(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS.toString(),
+                        HttpHeaderNames.CONTENT_TYPE.toString() + ", " + HttpHeaderNames.ACCEPT.toString() +
+                                ", X-Requested-With").build();
+    }
+
+    @GET
+    @Path("/endpoints")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getEndpoints() {
+        JsonObject response = new JsonObject();
+        // add package info into response
+        Gson gson = new Gson();
+        String json = gson.toJson(ParserUtils.getEndpoints());
+        JsonParser parser = new JsonParser();
+        JsonArray packagesArray = parser.parse(json).getAsJsonArray();
+        response.add("packages", packagesArray);
+        return Response.status(Response.Status.OK)
+                .entity(response)
+                .header("Access-Control-Allow-Origin", '*').type(MediaType.APPLICATION_JSON).build();
+    }
+
+    @OPTIONS
+    @Path("/actions")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getActionsOptions() {
+        return Response.ok()
+                .header(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE.toString(), "600 ")
+                .header(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN.toString(), "*")
+                .header(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS.toString(), "true")
+                .header(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS.toString(),
+                        "POST, GET, PUT, UPDATE, DELETE, OPTIONS, HEAD")
+                .header(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS.toString(),
+                        HttpHeaderNames.CONTENT_TYPE.toString() + ", " + HttpHeaderNames.ACCEPT.toString() +
+                                ", X-Requested-With").build();
+    }
+
+    @GET
+    @Path("/actions")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getActions(@QueryParam(value = "pkgName") String pkgName,
+                               @QueryParam(value = "typeName") String typeName) {
+        JsonObject response = new JsonObject();
+        // add package info into response
+        Gson gson = new Gson();
+        String json = gson.toJson(ParserUtils.getActions(pkgName, typeName));
         JsonParser parser = new JsonParser();
         JsonArray packagesArray = parser.parse(json).getAsJsonArray();
         response.add("packages", packagesArray);
@@ -298,26 +364,25 @@ public class BallerinaParserService implements ComposerService {
                     && node instanceof BLangAnnotation) {
                 JsonArray attachmentPoints = new JsonArray();
                 ((BLangAnnotation) node)
-                        .getAttachmentPoints()
+                        .getAttachPoints()
                         .stream()
-                        .map(BLangAnnotationAttachmentPoint::getAttachmentPoint)
-                        .map(BLangAnnotationAttachmentPoint.AttachmentPoint::getValue)
+                        .map(AttachPoint::getValue)
                         .map(JsonPrimitive::new)
                         .forEach(attachmentPoints::add);
                 nodeJson.add("attachmentPoints", attachmentPoints);
             }
-
-            if (node.getKind() == NodeKind.USER_DEFINED_TYPE && jsonName.equals("typeName")) {
-                IdentifierNode typeNode = (IdentifierNode) prop;
-                Node structNode;
-                if (typeNode.getValue().startsWith("$anonStruct$") &&
-                        (structNode = anonStructs.remove(typeNode.getValue())) != null) {
-                    JsonObject anonStruct = generateJSON(structNode, anonStructs).getAsJsonObject();
-                    anonStruct.addProperty("anonStruct", true);
-                    nodeJson.add("anonStruct", anonStruct);
-                    continue;
-                }
-            }
+            // TODO: revisit logic for user defined types
+//            if (node.getKind() == NodeKind.USER_DEFINED_TYPE && jsonName.equals("typeName")) {
+//                IdentifierNode typeNode = (IdentifierNode) prop;
+//                Node structNode;
+//                if (typeNode.getValue().startsWith("$anonStruct$") &&
+//                        (structNode = anonStructs.remove(typeNode.getValue())) != null) {
+//                    JsonObject anonStruct = generateJSON(structNode, anonStructs).getAsJsonObject();
+//                    anonStruct.addProperty("anonStruct", true);
+//                    nodeJson.add("anonStruct", anonStruct);
+//                    continue;
+//                }
+//            }
 
             if (prop instanceof List && jsonName.equals("types")) {
                 // Currently we don't need any Symbols for the UI. So skipping for now.
@@ -336,11 +401,6 @@ public class BallerinaParserService implements ComposerService {
                     if (listPropItem instanceof Node) {
                         /* Remove top level anon func and struct */
                         if (node.getKind() == NodeKind.COMPILATION_UNIT) {
-                            if (listPropItem instanceof BLangStruct && ((BLangStruct) listPropItem).isAnonymous) {
-                                anonStructs.put(((BLangStruct) listPropItem).getName().getValue(),
-                                        ((BLangStruct) listPropItem));
-                                continue;
-                            }
                             if (listPropItem instanceof BLangFunction
                                     && (((BLangFunction) listPropItem)).name.value.startsWith("$lambda$")) {
                                 continue;
@@ -383,6 +443,13 @@ public class BallerinaParserService implements ComposerService {
                 nodeJson.addProperty(jsonName, (Boolean) prop);
             } else if (prop instanceof Enum) {
                 nodeJson.addProperty(jsonName, StringUtils.lowerCase(((Enum) prop).name()));
+            } else if (prop instanceof int[]) {
+                int[] intArray = ((int[]) prop);
+                JsonArray intArrayPropJson = new JsonArray();
+                nodeJson.add(jsonName, intArrayPropJson);
+                for (int intProp : intArray) {
+                    intArrayPropJson.add(intProp);
+                }
             } else if (prop != null) {
                 nodeJson.addProperty(jsonName, prop.toString());
                 String message = "Node " + node.getClass().getSimpleName() +
@@ -420,7 +487,7 @@ public class BallerinaParserService implements ComposerService {
      * @return List of errors if any
      */
     private synchronized JsonObject validateAndParse(BFile bFileRequest) throws InvocationTargetException,
-                                                                                IllegalAccessException {
+            IllegalAccessException {
         final String fileName = bFileRequest.getFileName();
         final String content = bFileRequest.getContent();
 

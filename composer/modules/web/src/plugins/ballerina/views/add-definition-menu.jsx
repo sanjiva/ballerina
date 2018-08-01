@@ -27,7 +27,13 @@ class AddDefinitionMenu extends React.Component {
 
     render() {
         return (
-            <Dropdown icon='fw fw-add left-icon' text='Definition' pointing className='link item' button className=' primary definition-dropdown'>
+            <Dropdown
+                button
+                className='icon primary definition-dropdown'
+                floating
+                labeled
+                icon='fw fw-add'
+                text='Definition'>
                 <Dropdown.Menu>
                     {
                         TopLevelElements.map((element) => {
@@ -38,7 +44,7 @@ class AddDefinitionMenu extends React.Component {
                                 onClick={
                                 (event, item) => {
                                     if (item.data.id === 'struct') {
-                                        this.context.command.dispatch('show-import-struct-dialog');
+                                        this.context.command.dispatch('show-import-record-dialog');
                                         return;
                                     }
                                     // Handle struct / transformer addition.
